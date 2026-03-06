@@ -63,24 +63,24 @@
 
 ### Checklist
 
-- [ ] Build Next.js frontend as static assets.
-- [ ] Wire FastAPI to serve built frontend at `/`.
-- [ ] Keep API namespace under `/api/*`.
-- [ ] Ensure static asset paths resolve correctly in container.
-- [ ] Remove temporary hello world route after frontend takeover.
+- [x] Build Next.js frontend as static assets.
+- [x] Wire FastAPI to serve built frontend at `/`.
+- [x] Keep API namespace under `/api/*`.
+- [x] Ensure static asset paths resolve correctly in container.
+- [x] Remove temporary hello world route after frontend takeover.
 
 ### Tests
 
-- [ ] Frontend unit tests pass with >=80% unit coverage threshold.
-- [ ] Integration test: root route returns Kanban UI from backend server.
-- [ ] Integration test: asset files load correctly (no broken JS/CSS references).
-- [ ] Container smoke test: board visible at `/` after container startup.
+- [x] Frontend unit tests pass with >=80% unit coverage threshold.
+- [x] Integration test: root route returns Kanban UI from backend server.
+- [x] Integration test: asset files load correctly (no broken JS/CSS references).
+- [x] Container smoke test: board visible at `/` after container startup.
 
 ### Success criteria
 
-- [ ] Existing Kanban demo renders at `/` when run in container.
-- [ ] API endpoints remain reachable under `/api`.
-- [ ] Coverage gate is enforced and passing for unit tests.
+- [x] Existing Kanban demo renders at `/` when run in container.
+- [x] API endpoints remain reachable under `/api`.
+- [x] Coverage gate is enforced and passing for unit tests.
 
 ## Part 4: Simple fake sign-in flow
 
