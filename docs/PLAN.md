@@ -152,22 +152,22 @@
 
 ### Checklist
 
-- [ ] Replace frontend in-memory board state initialization with backend fetch.
-- [ ] Persist board mutations through backend API.
-- [ ] Handle loading and failure states with minimal UI feedback.
-- [ ] Preserve drag/drop and card edit/create/delete behavior.
+- [x] Replace frontend in-memory board state initialization with backend fetch.
+- [x] Persist board mutations through backend API.
+- [x] Handle loading and failure states with minimal UI feedback.
+- [x] Preserve drag/drop and card edit/create/delete behavior.
 
 ### Tests
 
-- [ ] Frontend unit tests for API client and state transitions.
-- [ ] Integration tests covering read-on-load and mutate-then-refresh flows.
-- [ ] End-to-end test for persistence across page reload.
-- [ ] Review frontend unit coverage pragmatically; prioritize valuable cases over strict quota.
+- [x] Frontend unit tests for API client and state transitions.
+- [x] Integration tests covering read-on-load and mutate-then-refresh flows.
+- [x] End-to-end test for persistence across page reload.
+- [x] Review frontend unit coverage pragmatically; prioritize valuable cases over strict quota.
 
 ### Success criteria
 
-- [ ] UI reflects persisted backend state, not local demo-only state.
-- [ ] Core Kanban interactions continue to work with API-backed data.
+- [x] UI reflects persisted backend state, not local demo-only state.
+- [x] Core Kanban interactions continue to work with API-backed data.
 
 ## Part 8: OpenAI connectivity validation
 

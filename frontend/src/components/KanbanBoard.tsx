@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -18,6 +18,95 @@ import { createId, initialData, moveCard, type BoardData } from "@/lib/kanban";
 export const KanbanBoard = () => {
   const [board, setBoard] = useState<BoardData>(() => initialData);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const syncStatusTimerRef = useRef<number | null>(null);
+
+  const showTransientSyncStatus = (message: string) => {
+    setSyncStatus(message);
+    if (syncStatusTimerRef.current) {
+      window.clearTimeout(syncStatusTimerRef.current);
+    }
+    syncStatusTimerRef.current = window.setTimeout(() => {
+      setSyncStatus(null);
+      syncStatusTimerRef.current = null;
+    }, 2200);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBoard = async () => {
+      try {
+        const response = await fetch("/api/board");
+        if (response.status === 401) {
+          window.location.assign("/login");
+          return;
+        }
+        if (!response.ok) {
+          throw new Error(`Failed to load board: ${response.status}`);
+        }
+
+        const payload = (await response.json()) as { board?: BoardData };
+        if (!payload.board) {
+          throw new Error("Board payload missing");
+        }
+
+        if (!cancelled) {
+          setBoard(payload.board);
+        }
+      } catch {
+        if (!cancelled) {
+          setSyncStatus("Using local board. Changes may not persist.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadBoard();
+
+    return () => {
+      cancelled = true;
+      if (syncStatusTimerRef.current) {
+        window.clearTimeout(syncStatusTimerRef.current);
+      }
+    };
+  }, []);
+
+  const persistBoard = async (nextBoard: BoardData) => {
+    try {
+      const response = await fetch("/api/board", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(nextBoard),
+      });
+
+      if (response.status === 401) {
+        window.location.assign("/login");
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(`Failed to save board: ${response.status}`);
+      }
+
+      showTransientSyncStatus("Saved");
+    } catch {
+      setSyncStatus("Unable to save right now.");
+    }
+  };
+
+  const updateBoard = (updater: (previous: BoardData) => BoardData) => {
+    setBoard((previous) => {
+      const next = updater(previous);
+      void persistBoard(next);
+      return next;
+    });
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -39,16 +128,16 @@ export const KanbanBoard = () => {
       return;
     }
 
-    setBoard((prev) => ({
-      ...prev,
-      columns: moveCard(prev.columns, active.id as string, over.id as string),
+    updateBoard((previous) => ({
+      ...previous,
+      columns: moveCard(previous.columns, active.id as string, over.id as string),
     }));
   };
 
   const handleRenameColumn = (columnId: string, title: string) => {
-    setBoard((prev) => ({
-      ...prev,
-      columns: prev.columns.map((column) =>
+    updateBoard((previous) => ({
+      ...previous,
+      columns: previous.columns.map((column) =>
         column.id === columnId ? { ...column, title } : column
       ),
     }));
@@ -56,13 +145,13 @@ export const KanbanBoard = () => {
 
   const handleAddCard = (columnId: string, title: string, details: string) => {
     const id = createId("card");
-    setBoard((prev) => ({
-      ...prev,
+    updateBoard((previous) => ({
+      ...previous,
       cards: {
-        ...prev.cards,
+        ...previous.cards,
         [id]: { id, title, details: details || "No details yet." },
       },
-      columns: prev.columns.map((column) =>
+      columns: previous.columns.map((column) =>
         column.id === columnId
           ? { ...column, cardIds: [...column.cardIds, id] }
           : column
@@ -71,13 +160,13 @@ export const KanbanBoard = () => {
   };
 
   const handleDeleteCard = (columnId: string, cardId: string) => {
-    setBoard((prev) => {
+    updateBoard((previous) => {
       return {
-        ...prev,
+        ...previous,
         cards: Object.fromEntries(
-          Object.entries(prev.cards).filter(([id]) => id !== cardId)
+          Object.entries(previous.cards).filter(([id]) => id !== cardId)
         ),
-        columns: prev.columns.map((column) =>
+        columns: previous.columns.map((column) =>
           column.id === columnId
             ? {
                 ...column,
@@ -118,6 +207,16 @@ export const KanbanBoard = () => {
               <p className="mt-2 text-lg font-semibold text-[var(--primary-blue)]">
                 One board. Five columns. Zero clutter.
               </p>
+              {isLoading && (
+                <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)]">
+                  Loading saved board...
+                </p>
+              )}
+              {!isLoading && syncStatus && (
+                <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)]">
+                  {syncStatus}
+                </p>
+              )}
               <form action="/auth/logout" method="post" className="mt-4">
                 <button
                   type="submit"

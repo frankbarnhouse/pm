@@ -1,26 +1,71 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { KanbanBoard } from "@/components/KanbanBoard";
+import { initialData } from "@/lib/kanban";
 
 const getFirstColumn = () => screen.getAllByTestId(/column-/i)[0];
 
+const waitForBoardLoad = async () => {
+  await waitFor(() => {
+    expect(screen.queryByText(/loading saved board/i)).not.toBeInTheDocument();
+  });
+};
+
+const mockBoardApi = () => {
+  const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const method = init?.method ?? "GET";
+
+    if (method === "PUT") {
+      const requestBody = JSON.parse((init?.body as string) || "{}");
+      return new Response(JSON.stringify({ board: requestBody }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ board: initialData }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  });
+
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+};
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
 describe("KanbanBoard", () => {
-  it("renders five columns", () => {
+  it("renders five columns", async () => {
+    mockBoardApi();
     render(<KanbanBoard />);
+    await waitForBoardLoad();
     expect(screen.getAllByTestId(/column-/i)).toHaveLength(5);
   });
 
   it("renames a column", async () => {
+    const fetchMock = mockBoardApi();
     render(<KanbanBoard />);
+    await waitForBoardLoad();
     const column = getFirstColumn();
     const input = within(column).getByLabelText("Column title");
-    await userEvent.clear(input);
-    await userEvent.type(input, "New Name");
+    fireEvent.change(input, { target: { value: "New Name" } });
     expect(input).toHaveValue("New Name");
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/board",
+        expect.objectContaining({ method: "PUT" })
+      );
+    });
   });
 
   it("adds and removes a card", async () => {
+    mockBoardApi();
     render(<KanbanBoard />);
+    await waitForBoardLoad();
     const column = getFirstColumn();
     const addButton = within(column).getByRole("button", {
       name: /add a card/i,
@@ -44,8 +89,10 @@ describe("KanbanBoard", () => {
     expect(within(column).queryByText("New card")).not.toBeInTheDocument();
   });
 
-  it("shows a logout button", () => {
+  it("shows a logout button", async () => {
+    mockBoardApi();
     render(<KanbanBoard />);
+    await waitForBoardLoad();
     const logout = screen.getByRole("button", { name: /log out/i });
     expect(logout).toBeInTheDocument();
   });

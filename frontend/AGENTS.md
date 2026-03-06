@@ -2,8 +2,8 @@
 
 ## Purpose
 
-This directory contains the existing frontend-only MVP demo for the Kanban UI.
-It is built with Next.js App Router and currently runs without backend persistence.
+This directory contains the Next.js frontend for the Kanban UI.
+It uses backend API persistence for board load/save in the integrated container setup.
 
 ## Current stack
 
@@ -32,7 +32,9 @@ It is built with Next.js App Router and currently runs without backend persisten
 - Adding cards
 - Deleting cards
 - Dragging cards within and across columns
-- No backend calls yet; all data is in-memory
+- Loads board from backend `GET /api/board` on mount
+- Persists board updates to backend `PUT /api/board`
+- Shows minimal status text for loading/sync failures
 
 - `src/components/KanbanColumn.tsx`
 - Renders a single column with editable title input
@@ -81,9 +83,8 @@ It is built with Next.js App Router and currently runs without backend persisten
 
 ## Current constraints
 
-- Frontend is a standalone demo and not yet integrated with FastAPI.
-- Auth is not implemented in frontend yet.
-- Board persistence is not implemented; state resets on reload.
+- Frontend expects backend routes at same origin (`/api/board`, `/auth/logout`).
+- In standalone frontend dev mode without backend API, board falls back to local initial data.
 - AI chat sidebar is not implemented yet.
 
 ## Guidance for future changes
