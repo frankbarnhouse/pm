@@ -49,7 +49,7 @@ def test_connectivity_returns_expected_shape(tmp_path: Path, monkeypatch) -> Non
     assert response.status_code == 200
     payload = response.json()
     assert payload["ok"] is True
-    assert payload["model"] == ai_client.OPENAI_MODEL
+    assert payload["model"] == ai_client.get_openai_model()
     assert payload["prompt"] == "2+2"
     assert payload["response"] == "4"
 

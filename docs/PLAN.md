@@ -1,5 +1,16 @@
 # Project Plan
 
+## Latest status
+
+- [x] Parts 1 through 10 are complete.
+- [x] Backend chat flow is stable with OpenAI Structured Outputs and atomic board updates.
+- [x] Frontend AI sidebar is integrated, including auto-refresh on AI-applied updates.
+- [x] Model selection is configurable via `.env` using `OPENAI_MODEL` (default `gpt-4.1-mini`).
+- [x] Current verification status:
+- [x] Backend tests passing (`28 passed`).
+- [x] Frontend unit tests passing (`14 passed`).
+- [x] Frontend e2e tests passing (`4 passed`).
+
 ## Working agreements
 
 - [x] Use Part 1 as a hard gate. No implementation for Part 2+ until user approval.
@@ -238,28 +249,28 @@
 
 ### Checklist
 
-- [ ] Add sidebar chat UI integrated with backend AI endpoint.
-- [ ] Display conversation history and request status.
-- [ ] Apply backend-confirmed board updates and refresh board state.
-- [ ] Keep interaction design clean and readable on desktop and mobile.
+- [x] Add sidebar chat UI integrated with backend AI endpoint.
+- [x] Display conversation history and request status.
+- [x] Apply backend-confirmed board updates and refresh board state.
+- [x] Keep interaction design clean and readable on desktop and mobile.
 
 ### Tests
 
-- [ ] Component/unit tests for chat UI state transitions.
-- [ ] Integration tests for chat request/response rendering.
-- [ ] End-to-end test covering AI-triggered board mutation reflected in UI.
-- [ ] Review unit coverage pragmatically; prioritize valuable cases over strict quota.
+- [x] Component/unit tests for chat UI state transitions.
+- [x] Integration tests for chat request/response rendering.
+- [x] End-to-end test covering AI-triggered board mutation reflected in UI.
+- [x] Review unit coverage pragmatically; prioritize valuable cases over strict quota.
 
 ### Success criteria
 
-- [ ] Sidebar chat is usable and stable.
-- [ ] Board updates from AI appear automatically after response.
-- [ ] No regression in existing Kanban interactions.
+- [x] Sidebar chat is usable and stable.
+- [x] Board updates from AI appear automatically after response.
+- [x] No regression in existing Kanban interactions.
 
 ## Quality gates (applies to all implementation parts)
 
-- [ ] Root cause first: identify and verify cause before fixing issues.
-- [ ] Keep implementation simple and avoid over-engineering.
-- [ ] Keep docs concise and updated as behavior changes.
-- [ ] Keep testing pragmatic: prioritize high-value tests and use coverage targets only when sensible.
-- [ ] Do not proceed to next part until current part meets success criteria.
+- [x] Root cause first: identify and verify cause before fixing issues.
+- [x] Keep implementation simple and avoid over-engineering.
+- [x] Keep docs concise and updated as behavior changes.
+- [x] Keep testing pragmatic: prioritize high-value tests and use coverage targets only when sensible.
+- [x] Do not proceed to next part until current part meets success criteria.

@@ -39,3 +39,70 @@ test("moves a card between columns", async ({ page }) => {
   await page.mouse.up();
   await expect(targetColumn.getByTestId("card-card-1")).toBeVisible();
 });
+
+test("applies AI chat board update and refreshes", async ({ page }) => {
+  const baseBoard = {
+    columns: [
+      { id: "col-backlog", title: "Backlog", cardIds: ["card-1"] },
+      { id: "col-discovery", title: "Discovery", cardIds: [] },
+      { id: "col-progress", title: "In Progress", cardIds: [] },
+      { id: "col-review", title: "Review", cardIds: [] },
+      { id: "col-done", title: "Done", cardIds: [] },
+    ],
+    cards: {
+      "card-1": {
+        id: "card-1",
+        title: "Plan release",
+        details: "Coordinate launch tasks.",
+      },
+    },
+  };
+
+  const updatedBoard = {
+    ...baseBoard,
+    columns: baseBoard.columns.map((column) =>
+      column.id === "col-review" ? { ...column, title: "QA" } : column
+    ),
+  };
+
+  let boardReads = 0;
+  await page.route("**/api/board", async (route) => {
+    const request = route.request();
+    if (request.method() === "PUT") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ board: updatedBoard }),
+      });
+      return;
+    }
+
+    boardReads += 1;
+    const body = boardReads === 1 ? { board: baseBoard } : { board: updatedBoard };
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(body),
+    });
+  });
+
+  await page.route("**/api/chat", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        assistant_message: "Renamed Review to QA.",
+        board_updated: true,
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByLabel("Message").fill("Rename Review to QA");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  await expect(page.getByText("Renamed Review to QA.")).toBeVisible();
+  await expect(
+    page.getByTestId("column-col-review").locator('input[aria-label="Column title"]')
+  ).toHaveValue("QA");
+});

@@ -8,6 +8,7 @@ from app.ai_client import (
     MissingApiKeyError,
     OpenAIChatError,
     OpenAIConnectivityError,
+    get_openai_model,
     run_connectivity_check,
     run_structured_chat,
 )
@@ -90,3 +91,15 @@ def test_structured_chat_error_is_wrapped() -> None:
             conversation_history=[],
             client_factory=lambda **_: _FakeOpenAIClient(should_raise=RuntimeError("boom")),
         )
+
+
+def test_openai_model_defaults_to_mini(monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
+
+    assert get_openai_model() == "gpt-4.1-mini"
+
+
+def test_openai_model_can_be_overridden(monkeypatch) -> None:
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-4.1-nano")
+
+    assert get_openai_model() == "gpt-4.1-nano"

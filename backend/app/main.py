@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 
 from app.ai_client import (
-    OPENAI_MODEL,
+    get_openai_model,
     OpenAIChatError,
     MissingApiKeyError,
     OpenAIConnectivityError,
@@ -566,7 +566,7 @@ def ai_connectivity(request: Request) -> dict[str, str | bool]:
 
     return {
         "ok": True,
-        "model": OPENAI_MODEL,
+        "model": get_openai_model(),
         "prompt": "2+2",
         "response": response_text,
     }
