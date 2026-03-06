@@ -118,6 +118,14 @@ export const KanbanBoard = () => {
               <p className="mt-2 text-lg font-semibold text-[var(--primary-blue)]">
                 One board. Five columns. Zero clutter.
               </p>
+              <form action="/auth/logout" method="post" className="mt-4">
+                <button
+                  type="submit"
+                  className="rounded-full border border-[var(--stroke)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--navy-dark)] transition hover:border-[var(--secondary-purple)] hover:text-[var(--secondary-purple)]"
+                >
+                  Log out
+                </button>
+              </form>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-4">

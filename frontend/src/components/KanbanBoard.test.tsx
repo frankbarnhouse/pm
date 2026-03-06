@@ -43,4 +43,10 @@ describe("KanbanBoard", () => {
 
     expect(within(column).queryByText("New card")).not.toBeInTheDocument();
   });
+
+  it("shows a logout button", () => {
+    render(<KanbanBoard />);
+    const logout = screen.getByRole("button", { name: /log out/i });
+    expect(logout).toBeInTheDocument();
+  });
 });

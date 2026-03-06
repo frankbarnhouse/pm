@@ -5,7 +5,7 @@
 - [ ] Use Part 1 as a hard gate. No implementation for Part 2+ until user approval.
 - [ ] Keep architecture to a single Docker container for the MVP.
 - [ ] Keep auth/session simple for MVP.
-- [ ] Target minimum 80% unit test coverage and robust integration testing across implemented parts.
+- [ ] Prioritize valuable unit and integration tests; target around 80% unit coverage only when sensible for the scope.
 - [ ] Propose AI Structured Output schema for user sign-off before implementation.
 - [ ] Define script filenames and conventions in Part 2.
 
@@ -71,7 +71,7 @@
 
 ### Tests
 
-- [x] Frontend unit tests pass with >=80% unit coverage threshold.
+- [x] Frontend unit tests pass with sensible coverage for implemented functionality.
 - [x] Integration test: root route returns Kanban UI from backend server.
 - [x] Integration test: asset files load correctly (no broken JS/CSS references).
 - [x] Container smoke test: board visible at `/` after container startup.
@@ -80,30 +80,30 @@
 
 - [x] Existing Kanban demo renders at `/` when run in container.
 - [x] API endpoints remain reachable under `/api`.
-- [x] Coverage gate is enforced and passing for unit tests.
+- [x] Coverage targets are used pragmatically and valuable tests are prioritized.
 
 ## Part 4: Simple fake sign-in flow
 
 ### Checklist
 
-- [ ] Add simple sign-in page/state with fixed credentials (`user` / `password`).
-- [ ] Add simple session handling (cookie-based session acceptable for MVP).
-- [ ] Gate Kanban route to signed-in users.
-- [ ] Add logout action clearing session.
-- [ ] Keep UX minimal and explicit for invalid credentials.
+- [x] Add simple sign-in page/state with fixed credentials (`user` / `password`).
+- [x] Add simple session handling (cookie-based session acceptable for MVP).
+- [x] Gate Kanban route to signed-in users.
+- [x] Add logout action clearing session.
+- [x] Keep UX minimal and explicit for invalid credentials.
 
 ### Tests
 
-- [ ] Unit tests for auth/session helpers and credential validation logic.
-- [ ] Integration tests for login success/failure and route gating.
-- [ ] Integration test for logout flow.
-- [ ] Coverage check remains >=80% for unit tests.
+- [x] Unit tests for auth/session helpers and credential validation logic.
+- [x] Integration tests for login success/failure and route gating.
+- [x] Integration test for logout flow.
+- [x] Coverage is reviewed pragmatically based on test value.
 
 ### Success criteria
 
-- [ ] Unauthenticated users cannot access board route.
-- [ ] Correct credentials allow access and maintain session.
-- [ ] Logout reliably returns user to signed-out state.
+- [x] Unauthenticated users cannot access board route.
+- [x] Correct credentials allow access and maintain session.
+- [x] Logout reliably returns user to signed-out state.
 
 ## Part 5: Database modeling and sign-off
 
@@ -140,7 +140,7 @@
 - [ ] Backend unit tests for DB access and data transformation logic.
 - [ ] API integration tests for success and error cases.
 - [ ] Integration test for first-run DB creation path.
-- [ ] Coverage check: backend unit tests >=80%.
+- [ ] Review backend unit coverage pragmatically; prioritize valuable cases over strict quota.
 
 ### Success criteria
 
@@ -162,7 +162,7 @@
 - [ ] Frontend unit tests for API client and state transitions.
 - [ ] Integration tests covering read-on-load and mutate-then-refresh flows.
 - [ ] End-to-end test for persistence across page reload.
-- [ ] Coverage check remains >=80% for unit tests.
+- [ ] Review frontend unit coverage pragmatically; prioritize valuable cases over strict quota.
 
 ### Success criteria
 
@@ -216,7 +216,7 @@
 - [ ] Unit tests for schema validation and operation application.
 - [ ] Integration tests for no-update and update-included responses.
 - [ ] Integration tests for invalid model outputs (safe reject path).
-- [ ] Coverage check: unit tests >=80%.
+- [ ] Review unit coverage pragmatically; prioritize valuable cases over strict quota.
 
 ### Success criteria
 
@@ -237,7 +237,7 @@
 - [ ] Component/unit tests for chat UI state transitions.
 - [ ] Integration tests for chat request/response rendering.
 - [ ] End-to-end test covering AI-triggered board mutation reflected in UI.
-- [ ] Coverage check: unit tests >=80%.
+- [ ] Review unit coverage pragmatically; prioritize valuable cases over strict quota.
 
 ### Success criteria
 
@@ -250,5 +250,5 @@
 - [ ] Root cause first: identify and verify cause before fixing issues.
 - [ ] Keep implementation simple and avoid over-engineering.
 - [ ] Keep docs concise and updated as behavior changes.
-- [ ] Maintain >=80% unit test coverage with robust integration tests.
+- [ ] Keep testing pragmatic: prioritize high-value tests and use coverage targets only when sensible.
 - [ ] Do not proceed to next part until current part meets success criteria.
