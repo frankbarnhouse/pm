@@ -6,8 +6,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.ai_client import (
     MissingApiKeyError,
+    OpenAIChatError,
     OpenAIConnectivityError,
     run_connectivity_check,
+    run_structured_chat,
 )
 
 
@@ -50,4 +52,41 @@ def test_empty_output_is_rejected() -> None:
         run_connectivity_check(
             api_key="test-key",
             client_factory=lambda **_: _FakeOpenAIClient(output_text=""),
+        )
+
+
+def test_structured_chat_success_returns_parsed_json() -> None:
+    output = run_structured_chat(
+        api_key="test-key",
+        board={"columns": [], "cards": {}},
+        user_prompt="Create something",
+        conversation_history=[],
+        client_factory=lambda **_: _FakeOpenAIClient(
+            output_text='{"assistant_message":"Done","board_update":null}'
+        ),
+    )
+
+    assert output["assistant_message"] == "Done"
+    assert output["board_update"] is None
+
+
+def test_structured_chat_empty_output_is_rejected() -> None:
+    with pytest.raises(OpenAIChatError):
+        run_structured_chat(
+            api_key="test-key",
+            board={"columns": [], "cards": {}},
+            user_prompt="Create something",
+            conversation_history=[],
+            client_factory=lambda **_: _FakeOpenAIClient(output_text=""),
+        )
+
+
+def test_structured_chat_error_is_wrapped() -> None:
+    with pytest.raises(OpenAIChatError):
+        run_structured_chat(
+            api_key="test-key",
+            board={"columns": [], "cards": {}},
+            user_prompt="Create something",
+            conversation_history=[],
+            client_factory=lambda **_: _FakeOpenAIClient(should_raise=RuntimeError("boom")),
         )

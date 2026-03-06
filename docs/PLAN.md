@@ -204,35 +204,35 @@
 
 ### Checklist
 
-- [ ] Finalize schema proposal with user sign-off before coding.
-- [ ] Send board JSON, user prompt, and conversation history to model.
-- [ ] Parse and validate structured response.
-- [ ] Apply optional board update atomically when included.
-- [ ] Return both assistant text and update result to caller.
+- [x] Finalize schema proposal with user sign-off before coding.
+- [x] Send board JSON, user prompt, and conversation history to model.
+- [x] Parse and validate structured response.
+- [x] Apply optional board update atomically when included.
+- [x] Return both assistant text and update result to caller.
 
 ### Proposed schema draft (for sign-off)
 
-- [ ] `assistant_message`: string
-- [ ] `board_update`: object or null
-- [ ] `board_update.operations`: array of operations
-- [ ] Operation types:
-- [ ] `create_card` with `column_id`, `title`, `details`
-- [ ] `edit_card` with `card_id`, optional `title`, optional `details`
-- [ ] `move_card` with `card_id`, `to_column_id`, optional `before_card_id`
-- [ ] `delete_card` with `card_id`
-- [ ] `rename_column` with `column_id`, `title`
+- [x] `assistant_message`: string
+- [x] `board_update`: object or null
+- [x] `board_update.operations`: array of operations
+- [x] Operation types:
+- [x] `create_card` with `column_id`, `title`, `details`
+- [x] `edit_card` with `card_id`, optional `title`, optional `details`
+- [x] `move_card` with `card_id`, `to_column_id`, optional `before_card_id`
+- [x] `delete_card` with `card_id`
+- [x] `rename_column` with `column_id`, `title`
 
 ### Tests
 
-- [ ] Unit tests for schema validation and operation application.
-- [ ] Integration tests for no-update and update-included responses.
-- [ ] Integration tests for invalid model outputs (safe reject path).
-- [ ] Review unit coverage pragmatically; prioritize valuable cases over strict quota.
+- [x] Unit tests for schema validation and operation application.
+- [x] Integration tests for no-update and update-included responses.
+- [x] Integration tests for invalid model outputs (safe reject path).
+- [x] Review unit coverage pragmatically; prioritize valuable cases over strict quota.
 
 ### Success criteria
 
-- [ ] AI responses are reliably parsed and validated.
-- [ ] Valid updates are applied correctly; invalid updates are rejected safely.
+- [x] AI responses are reliably parsed and validated.
+- [x] Valid updates are applied correctly; invalid updates are rejected safely.
 
 ## Part 10: Frontend AI sidebar and auto-refresh behavior
 

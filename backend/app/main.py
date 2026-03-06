@@ -1,19 +1,24 @@
 import json
 import sqlite3
+from copy import deepcopy
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Annotated, Literal
 from urllib.parse import parse_qs
+from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from app.ai_client import (
     OPENAI_MODEL,
+    OpenAIChatError,
     MissingApiKeyError,
     OpenAIConnectivityError,
     run_connectivity_check,
+    run_structured_chat,
 )
 
 @asynccontextmanager
@@ -28,8 +33,11 @@ FRONTEND_DIST_DIR = Path(__file__).resolve().parent.parent / "frontend_dist"
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "app.db"
 
 SESSION_COOKIE = "pm_session"
+SESSION_ID_COOKIE = "pm_session_id"
 MVP_USERNAME = "user"
 MVP_PASSWORD = "password"
+
+SESSION_CHAT_HISTORY: dict[str, list[dict[str, str]]] = {}
 
 INITIAL_BOARD = {
     "columns": [
@@ -127,6 +135,73 @@ class BoardPayload(BaseModel):
             raise ValueError(f"Unreferenced cards are not allowed: {sorted(unreferenced)}")
 
         return self
+
+
+class ChatMessagePayload(BaseModel):
+    prompt: str
+
+    @model_validator(mode="after")
+    def validate_prompt(self) -> "ChatMessagePayload":
+        if not self.prompt.strip():
+            raise ValueError("Prompt cannot be empty")
+        return self
+
+
+class CreateCardOperation(BaseModel):
+    type: Literal["create_card"]
+    column_id: str
+    title: str
+    details: str
+
+
+class EditCardOperation(BaseModel):
+    type: Literal["edit_card"]
+    card_id: str
+    title: str | None = None
+    details: str | None = None
+
+    @model_validator(mode="after")
+    def validate_has_changes(self) -> "EditCardOperation":
+        if self.title is None and self.details is None:
+            raise ValueError("edit_card requires title and/or details")
+        return self
+
+
+class MoveCardOperation(BaseModel):
+    type: Literal["move_card"]
+    card_id: str
+    to_column_id: str
+    before_card_id: str | None = None
+
+
+class DeleteCardOperation(BaseModel):
+    type: Literal["delete_card"]
+    card_id: str
+
+
+class RenameColumnOperation(BaseModel):
+    type: Literal["rename_column"]
+    column_id: str
+    title: str
+
+
+BoardOperation = Annotated[
+    CreateCardOperation
+    | EditCardOperation
+    | MoveCardOperation
+    | DeleteCardOperation
+    | RenameColumnOperation,
+    Field(discriminator="type"),
+]
+
+
+class BoardUpdatePayload(BaseModel):
+    operations: list[BoardOperation]
+
+
+class AIChatResultPayload(BaseModel):
+    assistant_message: str
+    board_update: BoardUpdatePayload | None = None
 
 
 def _db_connection() -> sqlite3.Connection:
@@ -236,6 +311,100 @@ def _write_user_board(user_id: int, board: dict) -> None:
 
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Board not found")
+
+
+def _next_card_id(board: dict) -> str:
+    max_suffix = 0
+    for card_id in board["cards"].keys():
+        if not card_id.startswith("card-"):
+            continue
+        suffix = card_id.removeprefix("card-")
+        if suffix.isdigit():
+            max_suffix = max(max_suffix, int(suffix))
+    return f"card-{max_suffix + 1}"
+
+
+def _find_column(board: dict, column_id: str) -> dict:
+    for column in board["columns"]:
+        if column["id"] == column_id:
+            return column
+    raise ValueError(f"Unknown column_id: {column_id}")
+
+
+def _remove_card_from_columns(board: dict, card_id: str) -> None:
+    for column in board["columns"]:
+        if card_id in column["cardIds"]:
+            column["cardIds"] = [existing_id for existing_id in column["cardIds"] if existing_id != card_id]
+
+
+def _apply_board_operations(current_board: dict, operations: list[BoardOperation]) -> dict:
+    board = deepcopy(current_board)
+
+    for operation in operations:
+        if operation.type == "create_card":
+            column = _find_column(board, operation.column_id)
+            new_card_id = _next_card_id(board)
+            board["cards"][new_card_id] = {
+                "id": new_card_id,
+                "title": operation.title,
+                "details": operation.details,
+            }
+            column["cardIds"].append(new_card_id)
+            continue
+
+        if operation.type == "edit_card":
+            card = board["cards"].get(operation.card_id)
+            if card is None:
+                raise ValueError(f"Unknown card_id: {operation.card_id}")
+            if operation.title is not None:
+                card["title"] = operation.title
+            if operation.details is not None:
+                card["details"] = operation.details
+            continue
+
+        if operation.type == "move_card":
+            if operation.card_id not in board["cards"]:
+                raise ValueError(f"Unknown card_id: {operation.card_id}")
+
+            destination = _find_column(board, operation.to_column_id)
+            _remove_card_from_columns(board, operation.card_id)
+
+            if operation.before_card_id is None:
+                destination["cardIds"].append(operation.card_id)
+                continue
+
+            if operation.before_card_id not in destination["cardIds"]:
+                raise ValueError(f"before_card_id must be in destination column: {operation.before_card_id}")
+
+            insert_index = destination["cardIds"].index(operation.before_card_id)
+            destination["cardIds"].insert(insert_index, operation.card_id)
+            continue
+
+        if operation.type == "delete_card":
+            if operation.card_id not in board["cards"]:
+                raise ValueError(f"Unknown card_id: {operation.card_id}")
+            _remove_card_from_columns(board, operation.card_id)
+            del board["cards"][operation.card_id]
+            continue
+
+        if operation.type == "rename_column":
+            column = _find_column(board, operation.column_id)
+            column["title"] = operation.title
+            continue
+
+    # Reuse BoardPayload validation before persisting the update.
+    return BoardPayload.model_validate(board).model_dump()
+
+
+def _get_session_id(request: Request) -> str | None:
+    return request.cookies.get(SESSION_ID_COOKIE)
+
+
+def _get_session_history(request: Request) -> list[dict[str, str]]:
+    session_id = _get_session_id(request)
+    if not session_id:
+        return []
+    return SESSION_CHAT_HISTORY.setdefault(session_id, [])
 
 
 def _frontend_file(path: str) -> Path:
@@ -403,6 +572,44 @@ def ai_connectivity(request: Request) -> dict[str, str | bool]:
     }
 
 
+@app.post("/api/chat")
+def chat(request: Request, payload: ChatMessagePayload) -> dict[str, str | bool]:
+    user = _require_api_user(request)
+    board = _read_user_board(user["id"])
+    history = _get_session_history(request)
+
+    try:
+        raw_result = run_structured_chat(
+            board=board,
+            user_prompt=payload.prompt,
+            conversation_history=history,
+        )
+        result = AIChatResultPayload.model_validate(raw_result)
+    except MissingApiKeyError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except OpenAIChatError as exc:
+        raise HTTPException(status_code=502, detail=f"OpenAI chat failed: {exc}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Invalid AI structured response: {exc}") from exc
+
+    board_updated = False
+    if result.board_update is not None:
+        try:
+            updated_board = _apply_board_operations(board, result.board_update.operations)
+            _write_user_board(user["id"], updated_board)
+            board_updated = True
+        except ValueError:
+            board_updated = False
+
+    history.append({"role": "user", "content": payload.prompt})
+    history.append({"role": "assistant", "content": result.assistant_message})
+
+    return {
+        "assistant_message": result.assistant_message,
+        "board_updated": board_updated,
+    }
+
+
 @app.get("/login", include_in_schema=False)
 def login_page(request: Request, error: str | None = None) -> Response:
     if _current_user(request):
@@ -420,9 +627,17 @@ async def login(request: Request) -> RedirectResponse:
         return RedirectResponse(url="/login?error=1", status_code=status.HTTP_303_SEE_OTHER)
 
     response = RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+    session_id = uuid4().hex
+    SESSION_CHAT_HISTORY.setdefault(session_id, [])
     response.set_cookie(
         key=SESSION_COOKIE,
         value=username,
+        httponly=True,
+        samesite="lax",
+    )
+    response.set_cookie(
+        key=SESSION_ID_COOKIE,
+        value=session_id,
         httponly=True,
         samesite="lax",
     )
@@ -430,9 +645,14 @@ async def login(request: Request) -> RedirectResponse:
 
 
 @app.post("/auth/logout", include_in_schema=False)
-def logout() -> RedirectResponse:
+def logout(request: Request) -> RedirectResponse:
+    session_id = _get_session_id(request)
+    if session_id:
+        SESSION_CHAT_HISTORY.pop(session_id, None)
+
     response = RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     response.delete_cookie(SESSION_COOKIE)
+    response.delete_cookie(SESSION_ID_COOKIE)
     return response
 
 

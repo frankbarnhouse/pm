@@ -65,6 +65,7 @@ def test_login_success_sets_cookie_and_accesses_board(tmp_path: Path) -> None:
     assert login_response.status_code == 303
     assert login_response.headers["location"] == "/"
     assert main.SESSION_COOKIE in login_response.cookies
+    assert main.SESSION_ID_COOKIE in login_response.cookies
     assert login_response.cookies[main.SESSION_COOKIE] == main.MVP_USERNAME
 
     board_response = client.get("/")
