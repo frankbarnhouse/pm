@@ -109,21 +109,21 @@
 
 ### Checklist
 
-- [ ] Propose SQLite schema for users and one board per user.
-- [ ] Model board storage as JSON payload for columns/cards.
-- [ ] Document schema, constraints, and migration approach in `docs/`.
-- [ ] Propose AI output schema draft for later Part 9 sign-off.
-- [ ] Obtain user sign-off before implementing data layer changes.
+- [x] Propose SQLite schema for users and one board per user.
+- [x] Model board storage as JSON payload for columns/cards.
+- [x] Document schema, constraints, and migration approach in `docs/`.
+- [x] Propose AI output schema draft for later Part 9 sign-off.
+- [x] Obtain user sign-off before implementing data layer changes.
 
 ### Tests
 
-- [ ] Validate schema proposal against required operations (read board, update board, card moves, edits).
-- [ ] Confirm forward compatibility for multi-user support.
+- [x] Validate schema proposal against required operations (read board, update board, card moves, edits).
+- [x] Confirm forward compatibility for multi-user support.
 
 ### Success criteria
 
-- [ ] Data model is simple, documented, and sufficient for MVP use cases.
-- [ ] User approves schema decisions before implementation.
+- [x] Data model is simple, documented, and sufficient for MVP use cases.
+- [x] User approves schema decisions before implementation.
 
 ## Part 6: Backend Kanban API with persistence
 
