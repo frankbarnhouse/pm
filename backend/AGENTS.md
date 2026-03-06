@@ -4,7 +4,7 @@
 
 This folder contains the FastAPI backend for the Project Management MVP.
 
-## Current scope (Part 6)
+## Current scope (Part 8)
 
 - FastAPI serves statically exported Next.js frontend at `/`.
 - FastAPI serves Next.js static assets under `/_next/*`.
@@ -16,15 +16,21 @@ This folder contains the FastAPI backend for the Project Management MVP.
 - Board API endpoints:
 - `GET /api/board` (read current user's board)
 - `PUT /api/board` (overwrite current user's board with validated payload)
+- OpenAI connectivity endpoint:
+- `POST /api/ai/connectivity` (authenticated `2+2` smoke call)
+- OpenAI model fixed to `gpt-4.1-mini` for MVP.
 - Python dependency management via `uv` using `pyproject.toml`.
 
 ## Files
 
 - `backend/app/main.py`: FastAPI app with health route, login/logout routes, and auth-gated frontend routing.
+- `backend/app/ai_client.py`: OpenAI connectivity wrapper and error types.
 - `backend/pyproject.toml`: Python project metadata and dependencies.
 - `backend/app/__init__.py`: Package marker for app module imports.
 - `backend/tests/test_auth_flow.py`: backend auth/session integration tests.
 - `backend/tests/test_board_api.py`: backend DB init and board API tests.
+- `backend/tests/test_ai_client.py`: unit tests for OpenAI wrapper.
+- `backend/tests/test_ai_connectivity_api.py`: endpoint auth/success/failure tests.
 - `backend/frontend_dist/` (container runtime path): exported Next.js frontend files.
 - `backend/data/app.db` (runtime): local SQLite DB, persisted via scripts bind mount.
 
@@ -37,4 +43,4 @@ This folder contains the FastAPI backend for the Project Management MVP.
 ## Next expected changes
 
 - Connect frontend state to backend board API in Part 7.
-- Add AI routes in later parts.
+- Add structured AI board-update routes in later parts.

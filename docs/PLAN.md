@@ -173,21 +173,21 @@
 
 ### Checklist
 
-- [ ] Add backend OpenAI client wiring using `OPENAI_API_KEY` from `.env`.
-- [ ] Use model `gpt-4.1-mini` per project requirement.
-- [ ] Add internal test route or test utility for basic connectivity check (`2+2`).
-- [ ] Add error handling for missing key and API failures.
+- [x] Add backend OpenAI client wiring using `OPENAI_API_KEY` from `.env`.
+- [x] Use model `gpt-4.1-mini` per project requirement.
+- [x] Add internal test route or test utility for basic connectivity check (`2+2`).
+- [x] Add error handling for missing key and API failures.
 
 ### Tests
 
-- [ ] Unit tests with mocked OpenAI client.
-- [ ] Integration test path for configured key and expected response shape.
-- [ ] Negative integration test for missing/invalid API key behavior.
+- [x] Unit tests with mocked OpenAI client.
+- [x] Integration test path for configured key and expected response shape.
+- [x] Negative integration test for missing/invalid API key behavior.
 
 ### Success criteria
 
-- [ ] Backend can successfully complete a simple OpenAI call.
-- [ ] Failure modes are understandable and non-destructive.
+- [x] Backend can successfully complete a simple OpenAI call.
+- [x] Failure modes are understandable and non-destructive.
 
 ## Part 9: Structured Outputs for chat + optional board updates
 

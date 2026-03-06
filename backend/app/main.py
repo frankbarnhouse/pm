@@ -9,6 +9,13 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, model_validator
 
+from app.ai_client import (
+    OPENAI_MODEL,
+    MissingApiKeyError,
+    OpenAIConnectivityError,
+    run_connectivity_check,
+)
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     _initialize_database()
@@ -375,6 +382,25 @@ def put_board(request: Request, payload: BoardPayload) -> dict:
     board = payload.model_dump()
     _write_user_board(user["id"], board)
     return {"board": board}
+
+
+@app.post("/api/ai/connectivity")
+def ai_connectivity(request: Request) -> dict[str, str | bool]:
+    _require_api_user(request)
+
+    try:
+        response_text = run_connectivity_check()
+    except MissingApiKeyError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except OpenAIConnectivityError as exc:
+        raise HTTPException(status_code=502, detail=f"OpenAI connectivity failed: {exc}") from exc
+
+    return {
+        "ok": True,
+        "model": OPENAI_MODEL,
+        "prompt": "2+2",
+        "response": response_text,
+    }
 
 
 @app.get("/login", include_in_schema=False)
