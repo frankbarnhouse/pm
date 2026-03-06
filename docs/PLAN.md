@@ -2,12 +2,12 @@
 
 ## Working agreements
 
-- [ ] Use Part 1 as a hard gate. No implementation for Part 2+ until user approval.
-- [ ] Keep architecture to a single Docker container for the MVP.
-- [ ] Keep auth/session simple for MVP.
-- [ ] Prioritize valuable unit and integration tests; target around 80% unit coverage only when sensible for the scope.
-- [ ] Propose AI Structured Output schema for user sign-off before implementation.
-- [ ] Define script filenames and conventions in Part 2.
+- [x] Use Part 1 as a hard gate. No implementation for Part 2+ until user approval.
+- [x] Keep architecture to a single Docker container for the MVP.
+- [x] Keep auth/session simple for MVP.
+- [x] Prioritize valuable unit and integration tests; target around 80% unit coverage only when sensible for the scope.
+- [x] Propose AI Structured Output schema for user sign-off before implementation.
+- [x] Define script filenames and conventions in Part 2.
 
 ## Part 1: Planning and documentation gate
 
@@ -20,13 +20,13 @@
 
 ### Tests
 
-- [ ] Documentation quality review against business requirements and technical decisions.
-- [ ] Confirm each part has explicit deliverables, tests, and success criteria.
+- [x] Documentation quality review against business requirements and technical decisions.
+- [x] Confirm each part has explicit deliverables, tests, and success criteria.
 
 ### Success criteria
 
-- [ ] Plan is specific enough to execute without guesswork.
-- [ ] Scope and ordering are clear and aligned with MVP constraints.
+- [x] Plan is specific enough to execute without guesswork.
+- [x] Scope and ordering are clear and aligned with MVP constraints.
 - [x] User explicitly approves moving to Part 2.
 
 ## Part 2: Scaffolding (single-container baseline)
@@ -125,6 +125,12 @@
 - [x] Data model is simple, documented, and sufficient for MVP use cases.
 - [x] User approves schema decisions before implementation.
 
+### Approved design decisions
+
+- [x] Store MVP login password in plaintext for seeded local dev user (`user` / `password`).
+- [x] Board write contract is overwrite-only (`PUT /api/board` replaces full board payload).
+- [x] AI-applied board updates must be atomic all-or-nothing after validation.
+
 ## Part 6: Backend Kanban API with persistence
 
 ### Checklist
@@ -188,6 +194,11 @@
 
 - [x] Backend can successfully complete a simple OpenAI call.
 - [x] Failure modes are understandable and non-destructive.
+
+### Implemented design decisions
+
+- [x] Connectivity check is exposed as authenticated `POST /api/ai/connectivity`.
+- [x] Missing API key returns `503`; provider failure returns `502`.
 
 ## Part 9: Structured Outputs for chat + optional board updates
 
