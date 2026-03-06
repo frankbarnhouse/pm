@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { initialData } from "@/lib/kanban";
 
@@ -137,9 +138,15 @@ describe("KanbanBoard", () => {
     expect(logout).toBeInTheDocument();
   });
 
-  it("renders the AI sidebar chat", async () => {
+  it("shows chat launcher and keeps chat closed by default", async () => {
     await setupBoard();
-    expect(screen.getByTestId("ai-chat-sidebar")).toBeInTheDocument();
+    expect(screen.getByTestId("chat-launcher")).toBeInTheDocument();
+    expect(screen.getByTestId("ai-chat-drawer")).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("opens chat from launcher", async () => {
+    await setupBoard();
+    await userEvent.click(screen.getByTestId("chat-launcher"));
     expect(screen.getByRole("heading", { name: /board chat/i })).toBeInTheDocument();
     expect(screen.getByText(/create, edit, move, or delete cards/i)).toBeInTheDocument();
   });
@@ -151,6 +158,8 @@ describe("KanbanBoard", () => {
         board_updated: false,
       },
     });
+
+    await userEvent.click(screen.getByTestId("chat-launcher"));
 
     const input = screen.getByLabelText("Message");
     await userEvent.type(input, "Review priorities for this sprint");
@@ -176,14 +185,18 @@ describe("KanbanBoard", () => {
       boardAfterChat,
     });
 
+    await userEvent.click(screen.getByTestId("chat-launcher"));
+
     await userEvent.type(screen.getByLabelText("Message"), "Rename Backlog to AI Backlog");
     await userEvent.click(screen.getByRole("button", { name: /send/i }));
 
     await screen.findByText("AI Backlog");
     await waitFor(() => {
       const boardGetCalls = fetchMock.mock.calls.filter(
-        ([url, init]) =>
-          url === "/api/board" && (!init || !init.method || init.method === "GET")
+        (call: [RequestInfo | URL, RequestInit?]) => {
+          const [url, init] = call;
+          return url === "/api/board" && (!init || !init.method || init.method === "GET");
+        }
       );
       expect(boardGetCalls.length).toBeGreaterThanOrEqual(2);
     });

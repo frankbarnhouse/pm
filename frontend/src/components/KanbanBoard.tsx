@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -23,6 +23,8 @@ export const KanbanBoard = () => {
   const [chatInput, setChatInput] = useState("");
   const [chatStatus, setChatStatus] = useState<string | null>(null);
   const [isChatSending, setIsChatSending] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatDesktopHeight, setChatDesktopHeight] = useState(520);
   const [chatMessages, setChatMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([
     {
       role: "assistant",
@@ -32,6 +34,9 @@ export const KanbanBoard = () => {
   const syncStatusTimerRef = useRef<number | null>(null);
   const chatStatusTimerRef = useRef<number | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const isResizingChatRef = useRef(false);
+  const resizeStartYRef = useRef(0);
+  const resizeStartHeightRef = useRef(520);
 
   const showTransientSyncStatus = (message: string) => {
     setSyncStatus(message);
@@ -96,6 +101,42 @@ export const KanbanBoard = () => {
     }
     chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
   }, [chatMessages]);
+
+  useEffect(() => {
+    const onPointerMove = (event: PointerEvent) => {
+      if (!isResizingChatRef.current) {
+        return;
+      }
+
+      const delta = resizeStartYRef.current - event.clientY;
+      const minHeight = 520;
+      const maxHeight = Math.max(minHeight, window.innerHeight - 48);
+      const nextHeight = Math.min(
+        maxHeight,
+        Math.max(minHeight, resizeStartHeightRef.current + delta)
+      );
+      setChatDesktopHeight(nextHeight);
+    };
+
+    const onPointerUp = () => {
+      isResizingChatRef.current = false;
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+  }, []);
+
+  const startChatResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    isResizingChatRef.current = true;
+    resizeStartYRef.current = event.clientY;
+    resizeStartHeightRef.current = chatDesktopHeight;
+  };
 
   const persistBoard = async (nextBoard: BoardData) => {
     try {
@@ -355,95 +396,141 @@ export const KanbanBoard = () => {
           </div>
         </header>
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCorners}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          >
-            <section className="grid gap-6 lg:grid-cols-5">
-              {board.columns.map((column) => (
-                <KanbanColumn
-                  key={column.id}
-                  column={column}
-                  cards={column.cardIds.map((cardId) => board.cards[cardId])}
-                  onRename={handleRenameColumn}
-                  onAddCard={handleAddCard}
-                  onDeleteCard={handleDeleteCard}
-                />
-              ))}
-            </section>
-            <DragOverlay>
-              {activeCard ? (
-                <div className="w-[260px]">
-                  <KanbanCardPreview card={activeCard} />
-                </div>
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-
-          <aside className="flex min-h-[520px] flex-col rounded-[28px] border border-[var(--stroke)] bg-white/90 p-5 shadow-[var(--shadow)] backdrop-blur" data-testid="ai-chat-sidebar">
-            <div className="border-b border-[var(--stroke)] pb-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">
-                AI Assistant
-              </p>
-              <h2 className="mt-2 font-display text-2xl text-[var(--navy-dark)]">Board Chat</h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--gray-text)]">
-                Ask for planning help or direct board changes. Applied updates refresh automatically.
-              </p>
-            </div>
-
-            <div
-              ref={chatScrollRef}
-              className="mt-4 flex-1 space-y-3 overflow-y-auto pr-1"
-              aria-live="polite"
-            >
-              {chatMessages.map((message, index) => (
-                <div
-                  key={`${message.role}-${index}`}
-                  className={
-                    message.role === "assistant"
-                      ? "rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-4 py-3 text-sm leading-6 text-[var(--navy-dark)]"
-                      : "rounded-2xl border border-transparent bg-[var(--primary-blue)] px-4 py-3 text-sm leading-6 text-white"
-                  }
-                >
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] opacity-75">
-                    {message.role === "assistant" ? "Assistant" : "You"}
-                  </p>
-                  <p>{message.content}</p>
-                </div>
-              ))}
-            </div>
-
-            <form onSubmit={handleChatSubmit} className="mt-4 space-y-3 border-t border-[var(--stroke)] pt-4">
-              <label htmlFor="chat-prompt" className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
-                Message
-              </label>
-              <textarea
-                id="chat-prompt"
-                value={chatInput}
-                onChange={(event) => setChatInput(event.target.value)}
-                rows={3}
-                placeholder="Try: Move card-3 to In Progress and rename Review to QA"
-                className="w-full resize-none rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-3 py-2 text-sm leading-6 text-[var(--navy-dark)] outline-none transition focus:border-[var(--secondary-purple)]"
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <section className="grid gap-6 lg:grid-cols-5">
+            {board.columns.map((column) => (
+              <KanbanColumn
+                key={column.id}
+                column={column}
+                cards={column.cardIds.map((cardId) => board.cards[cardId])}
+                onRename={handleRenameColumn}
+                onAddCard={handleAddCard}
+                onDeleteCard={handleDeleteCard}
               />
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--gray-text)]">
-                  {chatStatus || "Ready"}
-                </p>
-                <button
-                  type="submit"
-                  disabled={!chatInput.trim() || isChatSending}
-                  className="rounded-full bg-[var(--secondary-purple)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[#5f2f77] disabled:cursor-not-allowed disabled:opacity-55"
-                >
-                  {isChatSending ? "Sending..." : "Send"}
-                </button>
+            ))}
+          </section>
+          <DragOverlay>
+            {activeCard ? (
+              <div className="w-[260px]">
+                <KanbanCardPreview card={activeCard} />
               </div>
-            </form>
-          </aside>
-        </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       </main>
+
+      <button
+        type="button"
+        aria-label="Open board chat"
+        data-testid="chat-launcher"
+        onClick={() => setIsChatOpen(true)}
+        className="fixed bottom-6 right-6 z-40 inline-flex h-14 w-14 items-center justify-center rounded-full border border-[var(--stroke)] bg-[var(--secondary-purple)] text-white shadow-[var(--shadow)] transition hover:bg-[#5f2f77]"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 5.5C4 4.67 4.67 4 5.5 4H18.5C19.33 4 20 4.67 20 5.5V14.5C20 15.33 19.33 16 18.5 16H10.5L6 20V16H5.5C4.67 16 4 15.33 4 14.5V5.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+
+      {isChatOpen && (
+        <button
+          type="button"
+          aria-label="Close board chat"
+          className="fixed inset-0 z-40 bg-[rgba(3,33,71,0.28)]"
+          onClick={() => setIsChatOpen(false)}
+        />
+      )}
+
+      <aside
+        className={`fixed left-0 top-0 z-50 flex h-screen w-screen flex-col border-[var(--stroke)] bg-white p-5 shadow-[var(--shadow)] transition duration-300 sm:bottom-6 sm:right-6 sm:left-auto sm:top-auto sm:h-[var(--chat-desktop-height)] sm:w-[360px] sm:rounded-[28px] sm:border ${
+          isChatOpen
+            ? "translate-y-0 opacity-100"
+            : "pointer-events-none translate-y-6 opacity-0"
+        }`}
+        style={{ ["--chat-desktop-height" as string]: `${chatDesktopHeight}px` }}
+        data-testid="ai-chat-drawer"
+        aria-hidden={!isChatOpen}
+      >
+        <button
+          type="button"
+          aria-label="Resize board chat"
+          onPointerDown={startChatResize}
+          className="-mx-1 mb-3 hidden cursor-ns-resize items-center justify-center rounded-full py-1 sm:flex"
+        >
+          <span className="h-1 w-14 rounded-full bg-[var(--stroke)]" />
+        </button>
+        <div className="flex items-start justify-between gap-4 border-b border-[var(--stroke)] pb-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[var(--gray-text)]">
+              AI Assistant
+            </p>
+            <h2 className="mt-2 font-display text-2xl text-[var(--navy-dark)]">Board Chat</h2>
+            <p className="mt-2 text-sm leading-6 text-[var(--gray-text)]">
+              Ask for planning help or direct board changes. Applied updates refresh automatically.
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Close board chat"
+            onClick={() => setIsChatOpen(false)}
+            className="rounded-full border border-[var(--stroke)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-[var(--navy-dark)] transition hover:border-[var(--secondary-purple)] hover:text-[var(--secondary-purple)]"
+          >
+            Close
+          </button>
+        </div>
+
+        <div
+          ref={chatScrollRef}
+          className="mt-4 flex-1 space-y-3 overflow-y-auto pr-1"
+          aria-live="polite"
+        >
+          {chatMessages.map((message, index) => (
+            <div
+              key={`${message.role}-${index}`}
+              className={
+                message.role === "assistant"
+                  ? "rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-4 py-3 text-sm leading-6 text-[var(--navy-dark)]"
+                  : "rounded-2xl border border-transparent bg-[var(--primary-blue)] px-4 py-3 text-sm leading-6 text-white"
+              }
+            >
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] opacity-75">
+                {message.role === "assistant" ? "Assistant" : "You"}
+              </p>
+              <p>{message.content}</p>
+            </div>
+          ))}
+        </div>
+
+        <form onSubmit={handleChatSubmit} className="mt-4 space-y-3 border-t border-[var(--stroke)] pt-4">
+          <label htmlFor="chat-prompt" className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gray-text)]">
+            Message
+          </label>
+          <textarea
+            id="chat-prompt"
+            value={chatInput}
+            onChange={(event) => setChatInput(event.target.value)}
+            rows={3}
+            placeholder="Try: Move card-3 to In Progress and rename Review to QA"
+            className="w-full resize-none rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-3 py-2 text-sm leading-6 text-[var(--navy-dark)] outline-none transition focus:border-[var(--secondary-purple)]"
+          />
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--gray-text)]">
+              {chatStatus || "Ready"}
+            </p>
+            <button
+              type="submit"
+              disabled={!chatInput.trim() || isChatSending}
+              className="rounded-full bg-[var(--secondary-purple)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-[#5f2f77] disabled:cursor-not-allowed disabled:opacity-55"
+            >
+              {isChatSending ? "Sending..." : "Send"}
+            </button>
+          </div>
+        </form>
+      </aside>
     </div>
   );
 };

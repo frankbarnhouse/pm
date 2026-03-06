@@ -98,8 +98,14 @@ test("applies AI chat board update and refreshes", async ({ page }) => {
   });
 
   await page.goto("/");
-  await page.getByLabel("Message").fill("Rename Review to QA");
-  await page.getByRole("button", { name: "Send" }).click();
+  await page.evaluate(() => {
+    const launcher = document.querySelector('[data-testid="chat-launcher"]') as HTMLButtonElement | null;
+    launcher?.click();
+  });
+  const drawer = page.getByTestId("ai-chat-drawer");
+  await expect(drawer).toHaveAttribute("aria-hidden", "false");
+  await drawer.getByLabel("Message").fill("Rename Review to QA");
+  await drawer.getByRole("button", { name: "Send" }).click({ force: true });
 
   await expect(page.getByText("Renamed Review to QA.")).toBeVisible();
   await expect(
