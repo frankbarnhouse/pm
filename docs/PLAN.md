@@ -129,24 +129,24 @@
 
 ### Checklist
 
-- [ ] Implement DB initialization on startup if DB file does not exist.
-- [ ] Add API endpoints for reading and updating board data by user.
-- [ ] Enforce simple auth/session checks on protected endpoints.
-- [ ] Keep update contract explicit and validated.
-- [ ] Add backend service/repository separation only as needed for clarity.
+- [x] Implement DB initialization on startup if DB file does not exist.
+- [x] Add API endpoints for reading and updating board data by user.
+- [x] Enforce simple auth/session checks on protected endpoints.
+- [x] Keep update contract explicit and validated.
+- [x] Add backend service/repository separation only as needed for clarity.
 
 ### Tests
 
-- [ ] Backend unit tests for DB access and data transformation logic.
-- [ ] API integration tests for success and error cases.
-- [ ] Integration test for first-run DB creation path.
-- [ ] Review backend unit coverage pragmatically; prioritize valuable cases over strict quota.
+- [x] Backend unit tests for DB access and data transformation logic.
+- [x] API integration tests for success and error cases.
+- [x] Integration test for first-run DB creation path.
+- [x] Review backend unit coverage pragmatically; prioritize valuable cases over strict quota.
 
 ### Success criteria
 
-- [ ] Board state persists across restarts.
-- [ ] API behavior is deterministic and documented.
-- [ ] DB is auto-created without manual steps.
+- [x] Board state persists across restarts.
+- [x] API behavior is deterministic and documented.
+- [x] DB is auto-created without manual steps.
 
 ## Part 7: Connect frontend to backend API
 

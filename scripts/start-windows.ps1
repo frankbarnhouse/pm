@@ -3,6 +3,9 @@ $ErrorActionPreference = "Stop"
 $imageName = "udemy-pm-mvp"
 $containerName = "udemy-pm-mvp"
 $port = 8000
+$dataPath = Join-Path (Get-Location) "backend/data"
+
+New-Item -ItemType Directory -Path $dataPath -Force | Out-Null
 
 Write-Host "Building image $imageName..."
 docker build -t $imageName .
@@ -14,6 +17,6 @@ if ($exists) {
 }
 
 Write-Host "Starting container $containerName on http://localhost:$port..."
-docker run -d --name $containerName --env-file .env -p "${port}:8000" $imageName | Out-Null
+docker run -d --name $containerName --env-file .env -v "${dataPath}:/app/backend/data" -p "${port}:8000" $imageName | Out-Null
 
 Write-Host "App started: http://localhost:$port"

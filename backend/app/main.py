@@ -1,29 +1,234 @@
+import json
+import sqlite3
+from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import parse_qs
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, model_validator
 
-app = FastAPI(title="Project Management MVP API")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    _initialize_database()
+    yield
+
+
+app = FastAPI(title="Project Management MVP API", lifespan=lifespan)
 
 FRONTEND_DIST_DIR = Path(__file__).resolve().parent.parent / "frontend_dist"
+DB_PATH = Path(__file__).resolve().parent.parent / "data" / "app.db"
+
 SESSION_COOKIE = "pm_session"
-SESSION_VALUE = "authenticated"
-DEMO_USERNAME = "user"
-DEMO_PASSWORD = "password"
+MVP_USERNAME = "user"
+MVP_PASSWORD = "password"
 
-if (FRONTEND_DIST_DIR / "_next").exists():
-    app.mount(
-        "/_next",
-        StaticFiles(directory=FRONTEND_DIST_DIR / "_next"),
-        name="next-assets",
-    )
+INITIAL_BOARD = {
+    "columns": [
+        {"id": "col-backlog", "title": "Backlog", "cardIds": ["card-1", "card-2"]},
+        {"id": "col-discovery", "title": "Discovery", "cardIds": ["card-3"]},
+        {"id": "col-progress", "title": "In Progress", "cardIds": ["card-4", "card-5"]},
+        {"id": "col-review", "title": "Review", "cardIds": ["card-6"]},
+        {"id": "col-done", "title": "Done", "cardIds": ["card-7", "card-8"]},
+    ],
+    "cards": {
+        "card-1": {
+            "id": "card-1",
+            "title": "Align roadmap themes",
+            "details": "Draft quarterly themes with impact statements and metrics.",
+        },
+        "card-2": {
+            "id": "card-2",
+            "title": "Gather customer signals",
+            "details": "Review support tags, sales notes, and churn feedback.",
+        },
+        "card-3": {
+            "id": "card-3",
+            "title": "Prototype analytics view",
+            "details": "Sketch initial dashboard layout and key drill-downs.",
+        },
+        "card-4": {
+            "id": "card-4",
+            "title": "Refine status language",
+            "details": "Standardize column labels and tone across the board.",
+        },
+        "card-5": {
+            "id": "card-5",
+            "title": "Design card layout",
+            "details": "Add hierarchy and spacing for scanning dense lists.",
+        },
+        "card-6": {
+            "id": "card-6",
+            "title": "QA micro-interactions",
+            "details": "Verify hover, focus, and loading states.",
+        },
+        "card-7": {
+            "id": "card-7",
+            "title": "Ship marketing page",
+            "details": "Final copy approved and asset pack delivered.",
+        },
+        "card-8": {
+            "id": "card-8",
+            "title": "Close onboarding sprint",
+            "details": "Document release notes and share internally.",
+        },
+    },
+}
 
 
-@app.get("/api/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": "backend"}
+class CardPayload(BaseModel):
+    id: str
+    title: str
+    details: str
+
+
+class ColumnPayload(BaseModel):
+    id: str
+    title: str
+    cardIds: list[str]
+
+
+class BoardPayload(BaseModel):
+    columns: list[ColumnPayload]
+    cards: dict[str, CardPayload]
+
+    @model_validator(mode="after")
+    def validate_integrity(self) -> "BoardPayload":
+        column_ids = [column.id for column in self.columns]
+        if len(set(column_ids)) != len(column_ids):
+            raise ValueError("Column IDs must be unique")
+
+        card_ids = set(self.cards.keys())
+        all_references: list[str] = []
+        for card_id, card in self.cards.items():
+            if card.id != card_id:
+                raise ValueError(f"Card key {card_id} must match card.id")
+
+        for column in self.columns:
+            all_references.extend(column.cardIds)
+
+        if len(set(all_references)) != len(all_references):
+            raise ValueError("A card cannot exist in multiple columns")
+
+        unknown_ids = [card_id for card_id in all_references if card_id not in card_ids]
+        if unknown_ids:
+            raise ValueError(f"Unknown card IDs in columns: {unknown_ids}")
+
+        unreferenced = card_ids.difference(all_references)
+        if unreferenced:
+            raise ValueError(f"Unreferenced cards are not allowed: {sorted(unreferenced)}")
+
+        return self
+
+
+def _db_connection() -> sqlite3.Connection:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(DB_PATH)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    return connection
+
+
+def _initialize_database() -> None:
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+    with _db_connection() as connection:
+        connection.executescript(
+            """
+            PRAGMA user_version = 1;
+
+            CREATE TABLE IF NOT EXISTS users (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              username TEXT NOT NULL UNIQUE,
+              password_plaintext TEXT NOT NULL,
+              created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+              updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS boards (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              user_id INTEGER NOT NULL UNIQUE,
+              title TEXT NOT NULL DEFAULT 'Kanban Board',
+              board_json TEXT NOT NULL,
+              created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+              updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+              FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+            CREATE INDEX IF NOT EXISTS idx_boards_user_id ON boards(user_id);
+            """
+        )
+
+        connection.execute(
+            """
+            INSERT INTO users (username, password_plaintext)
+            VALUES (?, ?)
+            ON CONFLICT(username) DO NOTHING
+            """,
+            (MVP_USERNAME, MVP_PASSWORD),
+        )
+
+        user_id_row = connection.execute(
+            "SELECT id FROM users WHERE username = ?",
+            (MVP_USERNAME,),
+        ).fetchone()
+
+        if user_id_row is None:
+            raise RuntimeError("Failed to initialize MVP user")
+
+        connection.execute(
+            """
+            INSERT INTO boards (user_id, title, board_json)
+            VALUES (?, 'Kanban Board', ?)
+            ON CONFLICT(user_id) DO NOTHING
+            """,
+            (user_id_row["id"], json.dumps(INITIAL_BOARD)),
+        )
+
+
+def _get_user_by_username(username: str | None) -> sqlite3.Row | None:
+    if not username:
+        return None
+
+    with _db_connection() as connection:
+        return connection.execute(
+            "SELECT id, username, password_plaintext FROM users WHERE username = ?",
+            (username,),
+        ).fetchone()
+
+
+def _verify_credentials(username: str, password: str) -> bool:
+    user = _get_user_by_username(username)
+    return user is not None and user["password_plaintext"] == password
+
+
+def _read_user_board(user_id: int) -> dict:
+    with _db_connection() as connection:
+        row = connection.execute(
+            "SELECT board_json FROM boards WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="Board not found")
+    return json.loads(row["board_json"])
+
+
+def _write_user_board(user_id: int, board: dict) -> None:
+    with _db_connection() as connection:
+        result = connection.execute(
+            """
+            UPDATE boards
+            SET board_json = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            WHERE user_id = ?
+            """,
+            (json.dumps(board), user_id),
+        )
+
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Board not found")
 
 
 def _frontend_file(path: str) -> Path:
@@ -37,15 +242,23 @@ def _frontend_file(path: str) -> Path:
     return FRONTEND_DIST_DIR / "index.html"
 
 
-def _is_authenticated(request: Request) -> bool:
-    return request.cookies.get(SESSION_COOKIE) == SESSION_VALUE
+def _current_user(request: Request) -> sqlite3.Row | None:
+    session_username = request.cookies.get(SESSION_COOKIE)
+    return _get_user_by_username(session_username)
+
+
+def _require_api_user(request: Request) -> sqlite3.Row:
+    user = _current_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return user
 
 
 def _login_html(show_error: bool) -> str:
     error_text = (
-    "<p class=\"error\">Invalid credentials. Use user / password.</p>"
-    if show_error
-    else ""
+        "<p class=\"error\">Invalid credentials. Use user / password.</p>"
+        if show_error
+        else ""
     )
     return f"""<!doctype html>
 <html lang=\"en\">
@@ -137,9 +350,36 @@ def _login_html(show_error: bool) -> str:
 """
 
 
+if (FRONTEND_DIST_DIR / "_next").exists():
+    app.mount(
+        "/_next",
+        StaticFiles(directory=FRONTEND_DIST_DIR / "_next"),
+        name="next-assets",
+    )
+
+
+@app.get("/api/health")
+def health() -> dict[str, str]:
+    return {"status": "ok", "service": "backend"}
+
+
+@app.get("/api/board")
+def get_board(request: Request) -> dict:
+    user = _require_api_user(request)
+    return {"board": _read_user_board(user["id"])}
+
+
+@app.put("/api/board")
+def put_board(request: Request, payload: BoardPayload) -> dict:
+    user = _require_api_user(request)
+    board = payload.model_dump()
+    _write_user_board(user["id"], board)
+    return {"board": board}
+
+
 @app.get("/login", include_in_schema=False)
 def login_page(request: Request, error: str | None = None) -> Response:
-    if _is_authenticated(request):
+    if _current_user(request):
         return RedirectResponse(url="/", status_code=status.HTTP_302_FOUND)
     return HTMLResponse(_login_html(show_error=error == "1"))
 
@@ -150,13 +390,13 @@ async def login(request: Request) -> RedirectResponse:
     username = form_data.get("username", [""])[0]
     password = form_data.get("password", [""])[0]
 
-    if username != DEMO_USERNAME or password != DEMO_PASSWORD:
+    if not _verify_credentials(username, password):
         return RedirectResponse(url="/login?error=1", status_code=status.HTTP_303_SEE_OTHER)
 
     response = RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
     response.set_cookie(
         key=SESSION_COOKIE,
-        value=SESSION_VALUE,
+        value=username,
         httponly=True,
         samesite="lax",
     )
@@ -172,7 +412,7 @@ def logout() -> RedirectResponse:
 
 @app.get("/", include_in_schema=False)
 def home(request: Request) -> Response:
-    if not _is_authenticated(request):
+    if _current_user(request) is None:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
 
     index_file = FRONTEND_DIST_DIR / "index.html"
@@ -188,7 +428,7 @@ def frontend_routes(request: Request, full_path: str) -> Response:
     if full_path.startswith("auth/") or full_path == "login":
         raise HTTPException(status_code=404, detail="Not found")
 
-    if not _is_authenticated(request):
+    if _current_user(request) is None:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
 
     file_path = _frontend_file(full_path)

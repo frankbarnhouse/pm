@@ -18,7 +18,9 @@ This folder contains cross-platform scripts for running the MVP in Docker.
 - Start scripts:
 - build image
 - remove existing container with same name if present
+- ensure local `backend/data` exists
 - run container detached with `.env` loaded
+- bind-mount `backend/data` to `/app/backend/data` for DB persistence
 - Stop scripts:
 - remove the container if present
 - print a no-op message when container does not exist
