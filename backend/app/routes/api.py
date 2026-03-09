@@ -29,11 +29,14 @@ from app.database import (
     write_user_board,
 )
 from app.models import (
+    AddCommentOperation,
+    AddCommentRequest,
     AIChatResultPayload,
     BoardPayload,
     ChangePasswordRequest,
     ChatMessagePayload,
     CreateBoardRequest,
+    DeleteCommentOperation,
     ImportBoardRequest,
     UpdateBoardMetaRequest,
     UpdateProfileRequest,
@@ -227,6 +230,33 @@ def get_board_stats(request: Request, board_id: int) -> dict:
         "overdue_count": overdue_count,
         "cards_per_column": cards_per_column,
     }
+
+
+@router.post("/boards/{board_id}/cards/{card_id}/comments", status_code=201)
+def add_comment(request: Request, board_id: int, card_id: str, payload: AddCommentRequest) -> dict:
+    user = require_api_user(request)
+    board = read_board_data(board_id, user["id"])
+    display_name = user["display_name"] or user["username"]
+    updated = apply_board_operations(board, [
+        AddCommentOperation(type="add_comment", card_id=card_id, text=payload.text, author=display_name),
+    ])
+    write_board_data(board_id, user["id"], updated)
+    card = updated["cards"][card_id]
+    return {"comment": card["comments"][-1]}
+
+
+@router.delete("/boards/{board_id}/cards/{card_id}/comments/{comment_id}")
+def delete_comment(request: Request, board_id: int, card_id: str, comment_id: str) -> dict:
+    user = require_api_user(request)
+    board = read_board_data(board_id, user["id"])
+    try:
+        updated = apply_board_operations(board, [
+            DeleteCommentOperation(type="delete_comment", card_id=card_id, comment_id=comment_id),
+        ])
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    write_board_data(board_id, user["id"], updated)
+    return {"deleted": True}
 
 
 @router.post("/boards/{board_id}/chat")

@@ -10,6 +10,13 @@ export const LABEL_COLORS: Record<CardLabel, { bg: string; text: string; name: s
   research: { bg: "bg-cyan-100", text: "text-cyan-700", name: "Research" },
 };
 
+export type CardComment = {
+  id: string;
+  text: string;
+  author: string;
+  created_at: string;
+};
+
 export type Card = {
   id: string;
   title: string;
@@ -17,6 +24,7 @@ export type Card = {
   priority?: "low" | "medium" | "high" | null;
   due_date?: string | null;
   labels?: CardLabel[];
+  comments?: CardComment[];
 };
 
 export type Column = {

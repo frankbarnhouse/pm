@@ -3,9 +3,11 @@ import pytest
 from app.board_ops import apply_board_operations
 from app.models import (
     AddColumnOperation,
+    AddCommentOperation,
     CreateCardOperation,
     DeleteCardOperation,
     DeleteColumnOperation,
+    DeleteCommentOperation,
     EditCardOperation,
     MoveCardOperation,
     MoveColumnOperation,
@@ -297,3 +299,63 @@ def test_move_column_clamps_position() -> None:
         MoveColumnOperation(type="move_column", column_id="col-1", position=100),
     ])
     assert result["columns"][-1]["id"] == "col-1"
+
+
+def test_add_comment_to_card() -> None:
+    board = _make_board()
+    result = apply_board_operations(board, [
+        AddCommentOperation(type="add_comment", card_id="card-1", text="Looks good", author="Alice"),
+    ])
+    comments = result["cards"]["card-1"]["comments"]
+    assert len(comments) == 1
+    assert comments[0]["text"] == "Looks good"
+    assert comments[0]["author"] == "Alice"
+    assert comments[0]["id"] == "cmt-1"
+
+
+def test_add_multiple_comments() -> None:
+    board = _make_board()
+    result = apply_board_operations(board, [
+        AddCommentOperation(type="add_comment", card_id="card-1", text="First", author="Alice"),
+        AddCommentOperation(type="add_comment", card_id="card-1", text="Second", author="Bob"),
+    ])
+    comments = result["cards"]["card-1"]["comments"]
+    assert len(comments) == 2
+    assert comments[0]["id"] == "cmt-1"
+    assert comments[1]["id"] == "cmt-2"
+
+
+def test_add_comment_unknown_card_raises() -> None:
+    board = _make_board()
+    with pytest.raises(ValueError, match="Unknown card_id"):
+        apply_board_operations(board, [
+            AddCommentOperation(type="add_comment", card_id="card-missing", text="X", author="A"),
+        ])
+
+
+def test_delete_comment() -> None:
+    board = _make_board()
+    # First add a comment
+    board_with_comment = apply_board_operations(board, [
+        AddCommentOperation(type="add_comment", card_id="card-1", text="To delete", author="Alice"),
+    ])
+    result = apply_board_operations(board_with_comment, [
+        DeleteCommentOperation(type="delete_comment", card_id="card-1", comment_id="cmt-1"),
+    ])
+    assert len(result["cards"]["card-1"]["comments"]) == 0
+
+
+def test_delete_comment_unknown_card_raises() -> None:
+    board = _make_board()
+    with pytest.raises(ValueError, match="Unknown card_id"):
+        apply_board_operations(board, [
+            DeleteCommentOperation(type="delete_comment", card_id="card-missing", comment_id="cmt-1"),
+        ])
+
+
+def test_delete_comment_unknown_comment_raises() -> None:
+    board = _make_board()
+    with pytest.raises(ValueError, match="Unknown comment_id"):
+        apply_board_operations(board, [
+            DeleteCommentOperation(type="delete_comment", card_id="card-1", comment_id="cmt-missing"),
+        ])

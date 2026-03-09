@@ -399,6 +399,40 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
     }));
   };
 
+  const handleAddComment = async (cardId: string, text: string) => {
+    try {
+      const response = await fetch(`/api/boards/${boardId}/cards/${cardId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!response.ok) throw new Error("Failed to add comment");
+      const refreshed = await loadBoardForRefresh();
+      if (refreshed) {
+        skipNextPersistRef.current = true;
+        setBoard(refreshed);
+      }
+    } catch {
+      showTransientSyncStatus("Failed to add comment.");
+    }
+  };
+
+  const handleDeleteComment = async (cardId: string, commentId: string) => {
+    try {
+      const response = await fetch(`/api/boards/${boardId}/cards/${cardId}/comments/${commentId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Failed to delete comment");
+      const refreshed = await loadBoardForRefresh();
+      if (refreshed) {
+        skipNextPersistRef.current = true;
+        setBoard(refreshed);
+      }
+    } catch {
+      showTransientSyncStatus("Failed to delete comment.");
+    }
+  };
+
   const handleDeleteColumn = (columnId: string) => {
     updateBoard((previous) => ({
       ...previous,
@@ -554,6 +588,8 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
                   onDeleteCard={handleDeleteCard}
                   onUpdateCard={handleUpdateCard}
                   onDeleteColumn={board.columns.length > 1 ? handleDeleteColumn : undefined}
+                  onAddComment={handleAddComment}
+                  onDeleteComment={handleDeleteComment}
                 />
               </div>
             ))}

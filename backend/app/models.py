@@ -6,6 +6,13 @@ from pydantic import BaseModel, Field, model_validator
 VALID_LABELS = {"bug", "feature", "improvement", "documentation", "urgent", "design", "research"}
 
 
+class CardComment(BaseModel):
+    id: str
+    text: str
+    author: str
+    created_at: str
+
+
 class CardPayload(BaseModel):
     id: str
     title: str
@@ -13,6 +20,7 @@ class CardPayload(BaseModel):
     priority: Literal["low", "medium", "high"] | None = None
     due_date: str | None = None
     labels: list[str] | None = None
+    comments: list[CardComment] | None = None
 
 
 class ColumnPayload(BaseModel):
@@ -119,6 +127,19 @@ class MoveColumnOperation(BaseModel):
     position: int
 
 
+class AddCommentOperation(BaseModel):
+    type: Literal["add_comment"]
+    card_id: str
+    text: str
+    author: str
+
+
+class DeleteCommentOperation(BaseModel):
+    type: Literal["delete_comment"]
+    card_id: str
+    comment_id: str
+
+
 BoardOperation = Annotated[
     CreateCardOperation
     | EditCardOperation
@@ -127,7 +148,9 @@ BoardOperation = Annotated[
     | RenameColumnOperation
     | AddColumnOperation
     | DeleteColumnOperation
-    | MoveColumnOperation,
+    | MoveColumnOperation
+    | AddCommentOperation
+    | DeleteCommentOperation,
     Field(discriminator="type"),
 ]
 
@@ -191,6 +214,10 @@ class UpdateProfileRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str = Field(min_length=4, max_length=100)
+
+
+class AddCommentRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
 
 
 class ImportBoardRequest(BaseModel):

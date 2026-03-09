@@ -1,4 +1,5 @@
 from copy import deepcopy
+from datetime import datetime, timezone
 
 from app.models import BoardOperation, BoardPayload
 
@@ -123,6 +124,31 @@ def apply_board_operations(current_board: dict, operations: list[BoardOperation]
             board["columns"] = [c for c in board["columns"] if c["id"] != operation.column_id]
             pos = max(0, min(operation.position, len(board["columns"])))
             board["columns"].insert(pos, column)
+            continue
+
+        if operation.type == "add_comment":
+            card = board["cards"].get(operation.card_id)
+            if card is None:
+                raise ValueError(f"Unknown card_id: {operation.card_id}")
+            if "comments" not in card or card["comments"] is None:
+                card["comments"] = []
+            comment_id = f"cmt-{len(card['comments']) + 1}"
+            card["comments"].append({
+                "id": comment_id,
+                "text": operation.text,
+                "author": operation.author,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+            continue
+
+        if operation.type == "delete_comment":
+            card = board["cards"].get(operation.card_id)
+            if card is None:
+                raise ValueError(f"Unknown card_id: {operation.card_id}")
+            comments = card.get("comments") or []
+            if not any(c["id"] == operation.comment_id for c in comments):
+                raise ValueError(f"Unknown comment_id: {operation.comment_id}")
+            card["comments"] = [c for c in comments if c["id"] != operation.comment_id]
             continue
 
     # Reuse BoardPayload validation before persisting the update.

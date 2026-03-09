@@ -38,6 +38,9 @@ CHAT_RESPONSE_SCHEMA: dict[str, Any] = {
                                                 "rename_column",
                                                 "add_column",
                                                 "delete_column",
+                                                "move_column",
+                                                "add_comment",
+                                                "delete_comment",
                                             ],
                                         },
                                         "column_id": {"type": ["string", "null"]},
@@ -47,6 +50,9 @@ CHAT_RESPONSE_SCHEMA: dict[str, Any] = {
                                         "to_column_id": {"type": ["string", "null"]},
                                         "before_card_id": {"type": ["string", "null"]},
                                         "position": {"type": ["integer", "null"]},
+                                        "text": {"type": ["string", "null"]},
+                                        "author": {"type": ["string", "null"]},
+                                        "comment_id": {"type": ["string", "null"]},
                                     },
                                     "required": [
                                         "type",
@@ -57,6 +63,9 @@ CHAT_RESPONSE_SCHEMA: dict[str, Any] = {
                                         "to_column_id",
                                         "before_card_id",
                                         "position",
+                                        "text",
+                                        "author",
+                                        "comment_id",
                                     ],
                                 },
                             }
@@ -131,7 +140,11 @@ def run_structured_chat(
     system_prompt = (
         "You are a project management assistant for a Kanban board. "
         "Use only the provided board context and history. "
-        "When proposing updates, keep column IDs fixed to existing columns and return only valid operations."
+        "When proposing updates, keep column IDs fixed to existing columns and return only valid operations. "
+        "Available operations: create_card, edit_card, move_card, delete_card, "
+        "rename_column, add_column, delete_column, move_column, add_comment, delete_comment. "
+        "For add_comment, set author to 'AI Assistant'. "
+        "Cards can have priority (low/medium/high), due_date (YYYY-MM-DD), labels, and comments."
     )
 
     user_payload = {

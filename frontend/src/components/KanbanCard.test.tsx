@@ -306,4 +306,108 @@ describe("KanbanCard", () => {
     );
     expect(screen.getByTestId("card-card-42")).toBeInTheDocument();
   });
+
+  it("shows comment count badge when card has comments", () => {
+    render(
+      <KanbanCard
+        card={{
+          id: "c1",
+          title: "Task",
+          details: "d",
+          comments: [
+            { id: "cmt-1", text: "Hello", author: "Alice", created_at: "2026-01-01T00:00:00Z" },
+            { id: "cmt-2", text: "World", author: "Bob", created_at: "2026-01-02T00:00:00Z" },
+          ],
+        }}
+        onDelete={vi.fn()}
+      />
+    );
+    expect(screen.getByTestId("comment-count")).toHaveTextContent("2");
+  });
+
+  it("does not show comment badge when no comments", () => {
+    render(
+      <KanbanCard
+        card={{ id: "c1", title: "Task", details: "d" }}
+        onDelete={vi.fn()}
+      />
+    );
+    expect(screen.queryByTestId("comment-count")).not.toBeInTheDocument();
+  });
+
+  it("shows comments in modal", async () => {
+    render(
+      <KanbanCard
+        card={{
+          id: "c1",
+          title: "Task",
+          details: "d",
+          comments: [
+            { id: "cmt-1", text: "Great work", author: "Alice", created_at: "2026-03-01T00:00:00Z" },
+          ],
+        }}
+        onDelete={vi.fn()}
+        onUpdateCard={vi.fn()}
+        onAddComment={vi.fn()}
+      />
+    );
+    await userEvent.click(screen.getByRole("button", { name: /edit details for task/i }));
+    expect(screen.getByTestId("comments-section")).toBeInTheDocument();
+    expect(screen.getByTestId("comment-cmt-1")).toBeInTheDocument();
+    expect(screen.getByText("Great work")).toBeInTheDocument();
+    expect(screen.getByText("Alice")).toBeInTheDocument();
+  });
+
+  it("shows comment input when onAddComment is provided", async () => {
+    render(
+      <KanbanCard
+        card={{ id: "c1", title: "Task", details: "d" }}
+        onDelete={vi.fn()}
+        onUpdateCard={vi.fn()}
+        onAddComment={vi.fn()}
+      />
+    );
+    await userEvent.click(screen.getByRole("button", { name: /edit details for task/i }));
+    expect(screen.getByTestId("comment-input")).toBeInTheDocument();
+    expect(screen.getByTestId("add-comment-btn")).toBeInTheDocument();
+  });
+
+  it("calls onAddComment when add button clicked", async () => {
+    const onAddComment = vi.fn();
+    render(
+      <KanbanCard
+        card={{ id: "c1", title: "Task", details: "d" }}
+        onDelete={vi.fn()}
+        onUpdateCard={vi.fn()}
+        onAddComment={onAddComment}
+      />
+    );
+    await userEvent.click(screen.getByRole("button", { name: /edit details for task/i }));
+    const input = screen.getByTestId("comment-input");
+    await userEvent.type(input, "New comment");
+    await userEvent.click(screen.getByTestId("add-comment-btn"));
+    expect(onAddComment).toHaveBeenCalledWith("c1", "New comment");
+  });
+
+  it("calls onDeleteComment when delete button clicked on a comment", async () => {
+    const onDeleteComment = vi.fn();
+    render(
+      <KanbanCard
+        card={{
+          id: "c1",
+          title: "Task",
+          details: "d",
+          comments: [
+            { id: "cmt-1", text: "Remove me", author: "Alice", created_at: "2026-03-01T00:00:00Z" },
+          ],
+        }}
+        onDelete={vi.fn()}
+        onUpdateCard={vi.fn()}
+        onDeleteComment={onDeleteComment}
+      />
+    );
+    await userEvent.click(screen.getByRole("button", { name: /edit details for task/i }));
+    await userEvent.click(screen.getByRole("button", { name: /delete comment by alice/i }));
+    expect(onDeleteComment).toHaveBeenCalledWith("c1", "cmt-1");
+  });
 });

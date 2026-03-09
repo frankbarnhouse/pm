@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
-import type { Card, CardLabel } from "@/lib/kanban";
+import type { Card, CardLabel, CardComment } from "@/lib/kanban";
 import { LABEL_COLORS } from "@/lib/kanban";
 
 const priorityStyles: Record<string, { dot: string; label: string }> = {
@@ -25,9 +25,11 @@ type KanbanCardProps = {
   card: Card;
   onDelete: (cardId: string) => void;
   onUpdateCard?: (cardId: string, updates: CardUpdates) => void;
+  onAddComment?: (cardId: string, text: string) => void;
+  onDeleteComment?: (cardId: string, commentId: string) => void;
 };
 
-export const KanbanCard = ({ card, onDelete, onUpdateCard }: KanbanCardProps) => {
+export const KanbanCard = ({ card, onDelete, onUpdateCard, onAddComment, onDeleteComment }: KanbanCardProps) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: card.id });
   const { ["aria-describedby"]: _ariaDescribedBy, ...sortableAttributes } = attributes;
@@ -40,6 +42,7 @@ export const KanbanCard = ({ card, onDelete, onUpdateCard }: KanbanCardProps) =>
 
   const priority = card.priority ? priorityStyles[card.priority] : null;
   const cardLabels = card.labels || [];
+  const commentCount = card.comments?.length || 0;
 
   const formatDueDate = (dateStr: string) => {
     const date = new Date(dateStr + "T00:00:00");
@@ -121,6 +124,14 @@ export const KanbanCard = ({ card, onDelete, onUpdateCard }: KanbanCardProps) =>
                   {priority.label}
                 </span>
               )}
+              {commentCount > 0 && (
+                <span className="inline-flex items-center gap-0.5 rounded-md bg-[var(--surface)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--gray-text)]" data-testid="comment-count">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                  </svg>
+                  {commentCount}
+                </span>
+              )}
             </div>
           </div>
           <div className="flex flex-shrink-0 gap-0.5 opacity-0 transition group-hover:opacity-100">
@@ -163,6 +174,8 @@ export const KanbanCard = ({ card, onDelete, onUpdateCard }: KanbanCardProps) =>
             onUpdateCard(card.id, updates);
             setShowDetails(false);
           }}
+          onAddComment={onAddComment ? (text) => onAddComment(card.id, text) : undefined}
+          onDeleteComment={onDeleteComment ? (commentId) => onDeleteComment(card.id, commentId) : undefined}
         />
       )}
     </>
@@ -173,9 +186,11 @@ type CardDetailsModalProps = {
   card: Card;
   onClose: () => void;
   onUpdate: (updates: CardUpdates) => void;
+  onAddComment?: (text: string) => void;
+  onDeleteComment?: (commentId: string) => void;
 };
 
-const CardDetailsModal = ({ card, onClose, onUpdate }: CardDetailsModalProps) => {
+const CardDetailsModal = ({ card, onClose, onUpdate, onAddComment, onDeleteComment }: CardDetailsModalProps) => {
   const [title, setTitle] = useState(card.title);
   const [details, setDetails] = useState(card.details);
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "">(card.priority || "");
@@ -183,6 +198,7 @@ const CardDetailsModal = ({ card, onClose, onUpdate }: CardDetailsModalProps) =>
   const [selectedLabels, setSelectedLabels] = useState<Set<CardLabel>>(
     new Set(card.labels || [])
   );
+  const [newComment, setNewComment] = useState("");
 
   const toggleLabel = (label: CardLabel) => {
     setSelectedLabels((prev) => {
@@ -300,6 +316,73 @@ const CardDetailsModal = ({ card, onClose, onUpdate }: CardDetailsModalProps) =>
               })}
             </div>
           </div>
+
+          {(onAddComment || (card.comments && card.comments.length > 0)) && (
+            <div>
+              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)]">
+                Comments
+              </span>
+              <div className="space-y-2" data-testid="comments-section">
+                {(card.comments || []).map((comment) => (
+                  <div key={comment.id} className="rounded-xl bg-[var(--surface)] px-3 py-2" data-testid={`comment-${comment.id}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-[var(--navy-dark)]">{comment.author}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-[var(--gray-text)]">
+                          {new Date(comment.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                        </span>
+                        {onDeleteComment && (
+                          <button
+                            type="button"
+                            onClick={() => onDeleteComment(comment.id)}
+                            className="text-[var(--gray-text)] hover:text-red-500"
+                            aria-label={`Delete comment by ${comment.author}`}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                              <line x1="18" y1="6" x2="6" y2="18" />
+                              <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <p className="mt-1 text-xs text-[var(--navy-dark)]">{comment.text}</p>
+                  </div>
+                ))}
+                {onAddComment && (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      placeholder="Add a comment..."
+                      className="flex-1 rounded-xl border border-[var(--stroke)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--navy-dark)] outline-none focus:border-[var(--primary-blue)]"
+                      data-testid="comment-input"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && newComment.trim()) {
+                          onAddComment(newComment.trim());
+                          setNewComment("");
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newComment.trim()) {
+                          onAddComment(newComment.trim());
+                          setNewComment("");
+                        }
+                      }}
+                      className="rounded-xl bg-[var(--primary-blue)] px-3 py-2 text-xs font-semibold text-white hover:brightness-110"
+                      data-testid="add-comment-btn"
+                    >
+                      Add
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mt-5 flex gap-3">
