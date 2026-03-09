@@ -13,23 +13,28 @@ from app.ai_client import (
 )
 from app.board_ops import apply_board_operations
 from app.database import (
+    change_user_password,
     create_board,
     delete_board,
     duplicate_board,
     get_board,
+    hash_password,
     list_user_boards_with_counts,
     read_board_data,
     read_user_board,
     update_board_meta,
+    update_user_display_name,
     write_board_data,
     write_user_board,
 )
 from app.models import (
     AIChatResultPayload,
     BoardPayload,
+    ChangePasswordRequest,
     ChatMessagePayload,
     CreateBoardRequest,
     UpdateBoardMetaRequest,
+    UpdateProfileRequest,
 )
 from app.session import (
     MAX_CHAT_HISTORY_MESSAGES,
@@ -55,6 +60,31 @@ def get_current_user(request: Request) -> dict:
         "username": user["username"],
         "display_name": user["display_name"],
     }
+
+
+@router.patch("/me")
+def update_profile(request: Request, payload: UpdateProfileRequest) -> dict:
+    user = require_api_user(request)
+    if payload.display_name is not None:
+        update_user_display_name(user["id"], payload.display_name)
+    from app.database import get_user_by_username
+
+    updated = get_user_by_username(user["username"])
+    return {
+        "id": updated["id"],
+        "username": updated["username"],
+        "display_name": updated["display_name"],
+    }
+
+
+@router.post("/me/password")
+def change_password(request: Request, payload: ChangePasswordRequest) -> dict:
+    user = require_api_user(request)
+    expected_hash = hash_password(payload.current_password, user["password_salt"])
+    if user["password_hash"] != expected_hash:
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    change_user_password(user["id"], payload.new_password)
+    return {"changed": True}
 
 
 # --- Multi-board endpoints ---

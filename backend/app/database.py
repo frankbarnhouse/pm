@@ -306,6 +306,33 @@ def create_user(username: str, password: str, display_name: str = "") -> int:
         return user_id
 
 
+def update_user_display_name(user_id: int, display_name: str) -> None:
+    with db_connection() as connection:
+        connection.execute(
+            """
+            UPDATE users
+            SET display_name = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            WHERE id = ?
+            """,
+            (display_name, user_id),
+        )
+
+
+def change_user_password(user_id: int, new_password: str) -> None:
+    salt = secrets.token_hex(16)
+    hashed = hash_password(new_password, salt)
+    with db_connection() as connection:
+        connection.execute(
+            """
+            UPDATE users
+            SET password_hash = ?, password_salt = ?,
+                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            WHERE id = ?
+            """,
+            (hashed, salt, user_id),
+        )
+
+
 def username_exists(username: str) -> bool:
     with db_connection() as connection:
         row = connection.execute(

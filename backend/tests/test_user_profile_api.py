@@ -57,6 +57,96 @@ def test_boards_list_includes_card_and_column_counts(tmp_path: Path) -> None:
     assert board["column_count"] == 5  # initial board has 5 columns
 
 
+def test_update_display_name(tmp_path: Path) -> None:
+    client = make_test_client(tmp_path)
+    login_test_client(client)
+
+    response = client.patch("/api/me", json={"display_name": "Frank B"})
+
+    assert response.status_code == 200
+    assert response.json()["display_name"] == "Frank B"
+
+    # Verify persistence
+    me = client.get("/api/me").json()
+    assert me["display_name"] == "Frank B"
+
+
+def test_update_display_name_requires_auth(tmp_path: Path) -> None:
+    client = make_test_client(tmp_path)
+
+    response = client.patch("/api/me", json={"display_name": "Hacker"})
+
+    assert response.status_code == 401
+
+
+def test_update_profile_requires_field(tmp_path: Path) -> None:
+    client = make_test_client(tmp_path)
+    login_test_client(client)
+
+    response = client.patch("/api/me", json={})
+
+    assert response.status_code == 422
+
+
+def test_change_password(tmp_path: Path) -> None:
+    client = make_test_client(tmp_path)
+    login_test_client(client)
+
+    response = client.post(
+        "/api/me/password",
+        json={"current_password": "password", "new_password": "newpass123"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["changed"] is True
+
+    # Logout and login with new password
+    client.post("/auth/logout", follow_redirects=False)
+    login_response = client.post(
+        "/auth/login",
+        data={"username": "user", "password": "newpass123"},
+        follow_redirects=False,
+    )
+    assert login_response.status_code == 303
+    assert login_response.headers["location"] == "/"
+
+
+def test_change_password_wrong_current(tmp_path: Path) -> None:
+    client = make_test_client(tmp_path)
+    login_test_client(client)
+
+    response = client.post(
+        "/api/me/password",
+        json={"current_password": "wrongpass", "new_password": "newpass123"},
+    )
+
+    assert response.status_code == 400
+    assert "incorrect" in response.json()["detail"].lower()
+
+
+def test_change_password_too_short(tmp_path: Path) -> None:
+    client = make_test_client(tmp_path)
+    login_test_client(client)
+
+    response = client.post(
+        "/api/me/password",
+        json={"current_password": "password", "new_password": "ab"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_change_password_requires_auth(tmp_path: Path) -> None:
+    client = make_test_client(tmp_path)
+
+    response = client.post(
+        "/api/me/password",
+        json={"current_password": "password", "new_password": "newpass"},
+    )
+
+    assert response.status_code == 401
+
+
 def test_new_board_has_zero_card_count(tmp_path: Path) -> None:
     client = make_test_client(tmp_path)
     login_test_client(client)

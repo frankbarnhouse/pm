@@ -162,3 +162,21 @@ class RegisterRequest(BaseModel):
         if not self.username.replace("_", "").replace("-", "").isalnum():
             raise ValueError("Username may only contain letters, numbers, hyphens, and underscores")
         return self
+
+
+# --- User profile models ---
+
+
+class UpdateProfileRequest(BaseModel):
+    display_name: str | None = Field(default=None, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_has_fields(self) -> "UpdateProfileRequest":
+        if self.display_name is None:
+            raise ValueError("At least one field is required")
+        return self
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=4, max_length=100)
