@@ -13,6 +13,7 @@ from app.ai_client import (
 )
 from app.board_ops import apply_board_operations
 from app.database import (
+    archive_board,
     change_user_password,
     create_board,
     delete_board,
@@ -91,9 +92,9 @@ def change_password(request: Request, payload: ChangePasswordRequest) -> dict:
 
 
 @router.get("/boards")
-def get_boards(request: Request) -> dict:
+def get_boards(request: Request, include_archived: bool = False) -> dict:
     user = require_api_user(request)
-    boards = list_user_boards_with_counts(user["id"])
+    boards = list_user_boards_with_counts(user["id"], include_archived=include_archived)
     return {"boards": boards}
 
 
@@ -130,6 +131,22 @@ def patch_board_meta(request: Request, board_id: int, payload: UpdateBoardMetaRe
     user = require_api_user(request)
     updated = update_board_meta(board_id, user["id"], payload.title, payload.description)
     return {"board": updated}
+
+
+@router.post("/boards/{board_id}/archive")
+def archive_board_endpoint(request: Request, board_id: int) -> dict:
+    user = require_api_user(request)
+    if not archive_board(board_id, user["id"], archived=True):
+        raise HTTPException(status_code=404, detail="Board not found")
+    return {"archived": True}
+
+
+@router.post("/boards/{board_id}/unarchive")
+def unarchive_board_endpoint(request: Request, board_id: int) -> dict:
+    user = require_api_user(request)
+    if not archive_board(board_id, user["id"], archived=False):
+        raise HTTPException(status_code=404, detail="Board not found")
+    return {"archived": False}
 
 
 @router.post("/boards/{board_id}/duplicate", status_code=201)

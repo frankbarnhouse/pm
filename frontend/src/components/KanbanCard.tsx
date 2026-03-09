@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
-import type { Card } from "@/lib/kanban";
+import type { Card, CardLabel } from "@/lib/kanban";
+import { LABEL_COLORS } from "@/lib/kanban";
 
 const priorityStyles: Record<string, { dot: string; label: string }> = {
   high: { dot: "bg-red-500", label: "High" },
@@ -10,10 +11,20 @@ const priorityStyles: Record<string, { dot: string; label: string }> = {
   low: { dot: "bg-[#34a77f]", label: "Low" },
 };
 
+const ALL_LABELS: CardLabel[] = ["bug", "feature", "improvement", "documentation", "urgent", "design", "research"];
+
+type CardUpdates = {
+  title?: string;
+  details?: string;
+  priority?: "low" | "medium" | "high" | null;
+  due_date?: string | null;
+  labels?: CardLabel[];
+};
+
 type KanbanCardProps = {
   card: Card;
   onDelete: (cardId: string) => void;
-  onUpdateCard?: (cardId: string, updates: { title?: string; details?: string; priority?: "low" | "medium" | "high" | null; due_date?: string | null }) => void;
+  onUpdateCard?: (cardId: string, updates: CardUpdates) => void;
 };
 
 export const KanbanCard = ({ card, onDelete, onUpdateCard }: KanbanCardProps) => {
@@ -28,6 +39,7 @@ export const KanbanCard = ({ card, onDelete, onUpdateCard }: KanbanCardProps) =>
   };
 
   const priority = card.priority ? priorityStyles[card.priority] : null;
+  const cardLabels = card.labels || [];
 
   const formatDueDate = (dateStr: string) => {
     const date = new Date(dateStr + "T00:00:00");
@@ -56,6 +68,22 @@ export const KanbanCard = ({ card, onDelete, onUpdateCard }: KanbanCardProps) =>
         {...listeners}
         data-testid={`card-${card.id}`}
       >
+        {cardLabels.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1">
+            {cardLabels.map((label) => {
+              const style = LABEL_COLORS[label];
+              return style ? (
+                <span
+                  key={label}
+                  className={clsx("rounded-md px-1.5 py-0.5 text-[10px] font-semibold", style.bg, style.text)}
+                  data-testid={`label-${label}`}
+                >
+                  {style.name}
+                </span>
+              ) : null;
+            })}
+          </div>
+        )}
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -144,7 +172,7 @@ export const KanbanCard = ({ card, onDelete, onUpdateCard }: KanbanCardProps) =>
 type CardDetailsModalProps = {
   card: Card;
   onClose: () => void;
-  onUpdate: (updates: { title?: string; details?: string; priority?: "low" | "medium" | "high" | null; due_date?: string | null }) => void;
+  onUpdate: (updates: CardUpdates) => void;
 };
 
 const CardDetailsModal = ({ card, onClose, onUpdate }: CardDetailsModalProps) => {
@@ -152,6 +180,21 @@ const CardDetailsModal = ({ card, onClose, onUpdate }: CardDetailsModalProps) =>
   const [details, setDetails] = useState(card.details);
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "">(card.priority || "");
   const [dueDate, setDueDate] = useState(card.due_date || "");
+  const [selectedLabels, setSelectedLabels] = useState<Set<CardLabel>>(
+    new Set(card.labels || [])
+  );
+
+  const toggleLabel = (label: CardLabel) => {
+    setSelectedLabels((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) {
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
+      return next;
+    });
+  };
 
   const handleSave = () => {
     onUpdate({
@@ -159,6 +202,7 @@ const CardDetailsModal = ({ card, onClose, onUpdate }: CardDetailsModalProps) =>
       details: details.trim(),
       priority: priority || null,
       due_date: dueDate || null,
+      labels: Array.from(selectedLabels),
     });
   };
 
@@ -170,7 +214,7 @@ const CardDetailsModal = ({ card, onClose, onUpdate }: CardDetailsModalProps) =>
         onClick={onClose}
         aria-label="Close card details"
       />
-      <div className="fixed left-1/2 top-1/2 z-50 w-[90vw] max-w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[var(--stroke)] bg-white p-6 shadow-[0_18px_40px_rgba(3,33,71,0.16)]" data-testid="card-details-modal">
+      <div className="fixed left-1/2 top-1/2 z-50 w-[90vw] max-w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[var(--stroke)] bg-white p-6 shadow-[0_18px_40px_rgba(3,33,71,0.16)] max-h-[90vh] overflow-y-auto" data-testid="card-details-modal">
         <div className="space-y-4">
           <div>
             <label htmlFor="card-title" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)]">
@@ -226,6 +270,35 @@ const CardDetailsModal = ({ card, onClose, onUpdate }: CardDetailsModalProps) =>
               onChange={(e) => setDueDate(e.target.value)}
               className="w-full rounded-xl border border-[var(--stroke)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--navy-dark)] outline-none"
             />
+          </div>
+
+          <div>
+            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)]">
+              Labels
+            </span>
+            <div className="flex flex-wrap gap-2" data-testid="label-picker">
+              {ALL_LABELS.map((label) => {
+                const style = LABEL_COLORS[label];
+                const isSelected = selectedLabels.has(label);
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => toggleLabel(label)}
+                    className={clsx(
+                      "rounded-lg px-2.5 py-1 text-xs font-semibold transition",
+                      isSelected
+                        ? clsx(style.bg, style.text, "ring-2 ring-offset-1 ring-current")
+                        : "bg-[var(--surface)] text-[var(--gray-text)] hover:bg-gray-200"
+                    )}
+                    aria-pressed={isSelected}
+                    data-testid={`toggle-label-${label}`}
+                  >
+                    {style.name}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 

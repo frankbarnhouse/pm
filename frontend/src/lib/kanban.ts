@@ -1,9 +1,22 @@
+export type CardLabel = "bug" | "feature" | "improvement" | "documentation" | "urgent" | "design" | "research";
+
+export const LABEL_COLORS: Record<CardLabel, { bg: string; text: string; name: string }> = {
+  bug: { bg: "bg-red-100", text: "text-red-700", name: "Bug" },
+  feature: { bg: "bg-blue-100", text: "text-blue-700", name: "Feature" },
+  improvement: { bg: "bg-green-100", text: "text-green-700", name: "Improvement" },
+  documentation: { bg: "bg-purple-100", text: "text-purple-700", name: "Docs" },
+  urgent: { bg: "bg-orange-100", text: "text-orange-700", name: "Urgent" },
+  design: { bg: "bg-pink-100", text: "text-pink-700", name: "Design" },
+  research: { bg: "bg-cyan-100", text: "text-cyan-700", name: "Research" },
+};
+
 export type Card = {
   id: string;
   title: string;
   details: string;
   priority?: "low" | "medium" | "high" | null;
   due_date?: string | null;
+  labels?: CardLabel[];
 };
 
 export type Column = {

@@ -14,7 +14,7 @@ import {
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { AddColumnButton } from "@/components/AddColumnButton";
-import { createId, initialData, moveCard, type BoardData } from "@/lib/kanban";
+import { createId, initialData, moveCard, type BoardData, type CardLabel } from "@/lib/kanban";
 
 type KanbanBoardProps = {
   boardId: number;
@@ -27,6 +27,7 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPriority, setFilterPriority] = useState<string>("");
+  const [filterLabel, setFilterLabel] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
@@ -380,7 +381,7 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
     });
   };
 
-  const handleUpdateCard = (cardId: string, updates: { title?: string; details?: string; priority?: "low" | "medium" | "high" | null; due_date?: string | null }) => {
+  const handleUpdateCard = (cardId: string, updates: { title?: string; details?: string; priority?: "low" | "medium" | "high" | null; due_date?: string | null; labels?: CardLabel[] }) => {
     updateBoard((previous) => ({
       ...previous,
       cards: {
@@ -413,9 +414,9 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
 
   const activeCard = activeCardId ? board.cards[activeCardId] : null;
 
-  const hasFilter = searchQuery.trim() !== "" || filterPriority !== "";
+  const hasFilter = searchQuery.trim() !== "" || filterPriority !== "" || filterLabel !== "";
 
-  const matchesFilter = (card: { title: string; details: string; priority?: string | null }) => {
+  const matchesFilter = (card: { title: string; details: string; priority?: string | null; labels?: string[] }) => {
     if (!hasFilter) return true;
     const query = searchQuery.toLowerCase();
     const textMatch =
@@ -423,7 +424,8 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
       card.title.toLowerCase().includes(query) ||
       card.details.toLowerCase().includes(query);
     const priorityMatch = !filterPriority || card.priority === filterPriority;
-    return textMatch && priorityMatch;
+    const labelMatch = !filterLabel || (card.labels || []).includes(filterLabel);
+    return textMatch && priorityMatch && labelMatch;
   };
 
   return (
@@ -507,10 +509,25 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
             <option value="medium">Medium</option>
             <option value="low">Low</option>
           </select>
+          <select
+            value={filterLabel}
+            onChange={(e) => setFilterLabel(e.target.value)}
+            className="rounded-lg border border-[var(--stroke)] bg-[var(--surface)] px-2 py-1.5 text-xs text-[var(--navy-dark)] outline-none"
+            data-testid="label-filter"
+          >
+            <option value="">All labels</option>
+            <option value="bug">Bug</option>
+            <option value="feature">Feature</option>
+            <option value="improvement">Improvement</option>
+            <option value="documentation">Docs</option>
+            <option value="urgent">Urgent</option>
+            <option value="design">Design</option>
+            <option value="research">Research</option>
+          </select>
           {hasFilter && (
             <button
               type="button"
-              onClick={() => { setSearchQuery(""); setFilterPriority(""); }}
+              onClick={() => { setSearchQuery(""); setFilterPriority(""); setFilterLabel(""); }}
               className="rounded-lg border border-[var(--stroke)] px-2.5 py-1.5 text-xs font-medium text-[var(--gray-text)] transition hover:text-[var(--navy-dark)]"
               data-testid="clear-filters"
             >

@@ -3,12 +3,16 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, model_validator
 
 
+VALID_LABELS = {"bug", "feature", "improvement", "documentation", "urgent", "design", "research"}
+
+
 class CardPayload(BaseModel):
     id: str
     title: str
     details: str
     priority: Literal["low", "medium", "high"] | None = None
     due_date: str | None = None
+    labels: list[str] | None = None
 
 
 class ColumnPayload(BaseModel):

@@ -199,6 +199,7 @@ describe("KanbanCard", () => {
       details: "info",
       priority: "high",
       due_date: "2026-12-25",
+      labels: [],
     });
   });
 
@@ -219,6 +220,7 @@ describe("KanbanCard", () => {
       details: "info",
       priority: null,
       due_date: null,
+      labels: [],
     });
   });
 
@@ -239,6 +241,60 @@ describe("KanbanCard", () => {
     expect(onUpdateCard).toHaveBeenCalledWith("c1", expect.objectContaining({
       details: "new details",
     }));
+  });
+
+  it("renders labels on card", () => {
+    render(
+      <KanbanCard
+        card={{ id: "c1", title: "Task", details: "d", labels: ["bug", "feature"] }}
+        onDelete={vi.fn()}
+      />
+    );
+    expect(screen.getByTestId("label-bug")).toBeInTheDocument();
+    expect(screen.getByTestId("label-feature")).toBeInTheDocument();
+    expect(screen.getByText("Bug")).toBeInTheDocument();
+    expect(screen.getByText("Feature")).toBeInTheDocument();
+  });
+
+  it("does not render labels section when none set", () => {
+    render(
+      <KanbanCard
+        card={{ id: "c1", title: "Task", details: "d" }}
+        onDelete={vi.fn()}
+      />
+    );
+    expect(screen.queryByTestId(/^label-/)).not.toBeInTheDocument();
+  });
+
+  it("shows label picker in modal", async () => {
+    render(
+      <KanbanCard
+        card={{ id: "c1", title: "Task", details: "d" }}
+        onDelete={vi.fn()}
+        onUpdateCard={vi.fn()}
+      />
+    );
+    await userEvent.click(screen.getByRole("button", { name: /edit details for task/i }));
+    expect(screen.getByTestId("label-picker")).toBeInTheDocument();
+    expect(screen.getByTestId("toggle-label-bug")).toBeInTheDocument();
+  });
+
+  it("toggles labels in modal and saves them", async () => {
+    const onUpdateCard = vi.fn();
+    render(
+      <KanbanCard
+        card={{ id: "c1", title: "Task", details: "d" }}
+        onDelete={vi.fn()}
+        onUpdateCard={onUpdateCard}
+      />
+    );
+    await userEvent.click(screen.getByRole("button", { name: /edit details for task/i }));
+    await userEvent.click(screen.getByTestId("toggle-label-bug"));
+    await userEvent.click(screen.getByTestId("toggle-label-design"));
+    await userEvent.click(screen.getByRole("button", { name: /save/i }));
+    const call = onUpdateCard.mock.calls[0];
+    expect(call[1].labels).toContain("bug");
+    expect(call[1].labels).toContain("design");
   });
 
   it("has correct data-testid", () => {

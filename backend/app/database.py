@@ -141,6 +141,11 @@ def _migrate_boards_table(connection: sqlite3.Connection) -> None:
             "ALTER TABLE boards ADD COLUMN description TEXT NOT NULL DEFAULT ''"
         )
 
+    if "archived" not in board_columns:
+        connection.execute(
+            "ALTER TABLE boards ADD COLUMN archived INTEGER NOT NULL DEFAULT 0"
+        )
+
     # Remove UNIQUE constraint on user_id if it exists.
     # SQLite requires table recreation to drop constraints.
     index_info = connection.execute(
@@ -197,6 +202,7 @@ def initialize_database() -> None:
               user_id INTEGER NOT NULL,
               title TEXT NOT NULL DEFAULT 'Kanban Board',
               description TEXT NOT NULL DEFAULT '',
+              archived INTEGER NOT NULL DEFAULT 0,
               board_json TEXT NOT NULL,
               created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
               updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -359,17 +365,28 @@ def list_user_boards(user_id: int) -> list[dict]:
     return [dict(row) for row in rows]
 
 
-def list_user_boards_with_counts(user_id: int) -> list[dict]:
+def list_user_boards_with_counts(user_id: int, include_archived: bool = False) -> list[dict]:
     with db_connection() as connection:
-        rows = connection.execute(
-            """
-            SELECT id, title, description, board_json, created_at, updated_at
-            FROM boards
-            WHERE user_id = ?
-            ORDER BY updated_at DESC
-            """,
-            (user_id,),
-        ).fetchall()
+        if include_archived:
+            rows = connection.execute(
+                """
+                SELECT id, title, description, archived, board_json, created_at, updated_at
+                FROM boards
+                WHERE user_id = ?
+                ORDER BY updated_at DESC
+                """,
+                (user_id,),
+            ).fetchall()
+        else:
+            rows = connection.execute(
+                """
+                SELECT id, title, description, archived, board_json, created_at, updated_at
+                FROM boards
+                WHERE user_id = ? AND archived = 0
+                ORDER BY updated_at DESC
+                """,
+                (user_id,),
+            ).fetchall()
 
     boards = []
     for row in rows:
@@ -380,6 +397,7 @@ def list_user_boards_with_counts(user_id: int) -> list[dict]:
             "id": row["id"],
             "title": row["title"],
             "description": row["description"],
+            "archived": bool(row["archived"]),
             "card_count": card_count,
             "column_count": column_count,
             "created_at": row["created_at"],
@@ -482,6 +500,19 @@ def update_board_meta(board_id: int, user_id: int, title: str | None = None, des
             (board_id,),
         ).fetchone()
     return dict(row)
+
+
+def archive_board(board_id: int, user_id: int, archived: bool = True) -> bool:
+    with db_connection() as connection:
+        result = connection.execute(
+            """
+            UPDATE boards
+            SET archived = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            WHERE id = ? AND user_id = ?
+            """,
+            (1 if archived else 0, board_id, user_id),
+        )
+        return result.rowcount > 0
 
 
 def duplicate_board(board_id: int, user_id: int) -> dict:
