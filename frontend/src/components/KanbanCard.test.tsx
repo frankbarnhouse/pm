@@ -410,4 +410,112 @@ describe("KanbanCard", () => {
     await userEvent.click(screen.getByRole("button", { name: /delete comment by alice/i }));
     expect(onDeleteComment).toHaveBeenCalledWith("c1", "cmt-1");
   });
+
+  it("shows checklist progress badge on card", () => {
+    render(
+      <KanbanCard
+        card={{
+          id: "c1",
+          title: "Task",
+          details: "d",
+          checklist: [
+            { id: "chk-1", text: "Step 1", done: true },
+            { id: "chk-2", text: "Step 2", done: false },
+            { id: "chk-3", text: "Step 3", done: true },
+          ],
+        }}
+        onDelete={vi.fn()}
+      />
+    );
+    expect(screen.getByTestId("checklist-progress")).toHaveTextContent("2/3");
+  });
+
+  it("does not show checklist badge when no items", () => {
+    render(
+      <KanbanCard
+        card={{ id: "c1", title: "Task", details: "d" }}
+        onDelete={vi.fn()}
+      />
+    );
+    expect(screen.queryByTestId("checklist-progress")).not.toBeInTheDocument();
+  });
+
+  it("shows checklist section in modal", async () => {
+    render(
+      <KanbanCard
+        card={{
+          id: "c1",
+          title: "Task",
+          details: "d",
+          checklist: [
+            { id: "chk-1", text: "Write tests", done: false },
+          ],
+        }}
+        onDelete={vi.fn()}
+        onUpdateCard={vi.fn()}
+        onAddChecklistItem={vi.fn()}
+      />
+    );
+    await userEvent.click(screen.getByRole("button", { name: /edit details for task/i }));
+    expect(screen.getByTestId("checklist-section")).toBeInTheDocument();
+    expect(screen.getByTestId("checklist-chk-1")).toBeInTheDocument();
+    expect(screen.getByText("Write tests")).toBeInTheDocument();
+  });
+
+  it("calls onAddChecklistItem when add button clicked", async () => {
+    const onAddChecklistItem = vi.fn();
+    render(
+      <KanbanCard
+        card={{ id: "c1", title: "Task", details: "d" }}
+        onDelete={vi.fn()}
+        onUpdateCard={vi.fn()}
+        onAddChecklistItem={onAddChecklistItem}
+      />
+    );
+    await userEvent.click(screen.getByRole("button", { name: /edit details for task/i }));
+    const input = screen.getByTestId("checklist-input");
+    await userEvent.type(input, "New item");
+    await userEvent.click(screen.getByTestId("add-checklist-btn"));
+    expect(onAddChecklistItem).toHaveBeenCalledWith("c1", "New item");
+  });
+
+  it("calls onToggleChecklistItem when checkbox clicked", async () => {
+    const onToggleChecklistItem = vi.fn();
+    render(
+      <KanbanCard
+        card={{
+          id: "c1",
+          title: "Task",
+          details: "d",
+          checklist: [{ id: "chk-1", text: "Toggle me", done: false }],
+        }}
+        onDelete={vi.fn()}
+        onUpdateCard={vi.fn()}
+        onToggleChecklistItem={onToggleChecklistItem}
+      />
+    );
+    await userEvent.click(screen.getByRole("button", { name: /edit details for task/i }));
+    await userEvent.click(screen.getByTestId("toggle-checklist-chk-1"));
+    expect(onToggleChecklistItem).toHaveBeenCalledWith("c1", "chk-1");
+  });
+
+  it("calls onDeleteChecklistItem when delete button clicked", async () => {
+    const onDeleteChecklistItem = vi.fn();
+    render(
+      <KanbanCard
+        card={{
+          id: "c1",
+          title: "Task",
+          details: "d",
+          checklist: [{ id: "chk-1", text: "Delete me", done: false }],
+        }}
+        onDelete={vi.fn()}
+        onUpdateCard={vi.fn()}
+        onDeleteChecklistItem={onDeleteChecklistItem}
+      />
+    );
+    await userEvent.click(screen.getByRole("button", { name: /edit details for task/i }));
+    await userEvent.click(screen.getByRole("button", { name: /delete checklist item delete me/i }));
+    expect(onDeleteChecklistItem).toHaveBeenCalledWith("c1", "chk-1");
+  });
 });

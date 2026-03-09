@@ -13,6 +13,12 @@ class CardComment(BaseModel):
     created_at: str
 
 
+class ChecklistItem(BaseModel):
+    id: str
+    text: str
+    done: bool = False
+
+
 class CardPayload(BaseModel):
     id: str
     title: str
@@ -21,6 +27,7 @@ class CardPayload(BaseModel):
     due_date: str | None = None
     labels: list[str] | None = None
     comments: list[CardComment] | None = None
+    checklist: list[ChecklistItem] | None = None
 
 
 class ColumnPayload(BaseModel):
@@ -140,6 +147,24 @@ class DeleteCommentOperation(BaseModel):
     comment_id: str
 
 
+class AddChecklistItemOperation(BaseModel):
+    type: Literal["add_checklist_item"]
+    card_id: str
+    text: str
+
+
+class ToggleChecklistItemOperation(BaseModel):
+    type: Literal["toggle_checklist_item"]
+    card_id: str
+    item_id: str
+
+
+class DeleteChecklistItemOperation(BaseModel):
+    type: Literal["delete_checklist_item"]
+    card_id: str
+    item_id: str
+
+
 BoardOperation = Annotated[
     CreateCardOperation
     | EditCardOperation
@@ -150,7 +175,10 @@ BoardOperation = Annotated[
     | DeleteColumnOperation
     | MoveColumnOperation
     | AddCommentOperation
-    | DeleteCommentOperation,
+    | DeleteCommentOperation
+    | AddChecklistItemOperation
+    | ToggleChecklistItemOperation
+    | DeleteChecklistItemOperation,
     Field(discriminator="type"),
 ]
 
@@ -167,9 +195,19 @@ class AIChatResultPayload(BaseModel):
 # --- Multi-board API models ---
 
 
+BOARD_TEMPLATES = ["blank", "scrum", "bug_tracking", "product_launch"]
+
+
 class CreateBoardRequest(BaseModel):
     title: str = Field(min_length=1, max_length=100)
     description: str = ""
+    template: str = "blank"
+
+    @model_validator(mode="after")
+    def validate_template(self) -> "CreateBoardRequest":
+        if self.template not in BOARD_TEMPLATES:
+            raise ValueError(f"Unknown template: {self.template}. Must be one of {BOARD_TEMPLATES}")
+        return self
 
 
 class UpdateBoardMetaRequest(BaseModel):
@@ -218,6 +256,10 @@ class ChangePasswordRequest(BaseModel):
 
 class AddCommentRequest(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
+
+
+class AddChecklistItemRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
 
 
 class ImportBoardRequest(BaseModel):

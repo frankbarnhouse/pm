@@ -28,6 +28,7 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPriority, setFilterPriority] = useState<string>("");
   const [filterLabel, setFilterLabel] = useState<string>("");
+  const [sortBy, setSortBy] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
@@ -435,6 +436,56 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
     }
   };
 
+  const handleAddChecklistItem = async (cardId: string, text: string) => {
+    try {
+      const response = await fetch(`/api/boards/${boardId}/cards/${cardId}/checklist`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!response.ok) throw new Error("Failed to add checklist item");
+      const refreshed = await loadBoardForRefresh();
+      if (refreshed) {
+        skipNextPersistRef.current = true;
+        setBoard(refreshed);
+      }
+    } catch {
+      showTransientSyncStatus("Failed to add checklist item.");
+    }
+  };
+
+  const handleToggleChecklistItem = async (cardId: string, itemId: string) => {
+    try {
+      const response = await fetch(`/api/boards/${boardId}/cards/${cardId}/checklist/${itemId}/toggle`, {
+        method: "POST",
+      });
+      if (!response.ok) throw new Error("Failed to toggle checklist item");
+      const refreshed = await loadBoardForRefresh();
+      if (refreshed) {
+        skipNextPersistRef.current = true;
+        setBoard(refreshed);
+      }
+    } catch {
+      showTransientSyncStatus("Failed to toggle checklist item.");
+    }
+  };
+
+  const handleDeleteChecklistItem = async (cardId: string, itemId: string) => {
+    try {
+      const response = await fetch(`/api/boards/${boardId}/cards/${cardId}/checklist/${itemId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Failed to delete checklist item");
+      const refreshed = await loadBoardForRefresh();
+      if (refreshed) {
+        skipNextPersistRef.current = true;
+        setBoard(refreshed);
+      }
+    } catch {
+      showTransientSyncStatus("Failed to delete checklist item.");
+    }
+  };
+
   const loadActivity = async () => {
     try {
       const response = await fetch(`/api/boards/${boardId}/activity`);
@@ -469,7 +520,7 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
 
   const activeCard = activeCardId ? board.cards[activeCardId] : null;
 
-  const hasFilter = searchQuery.trim() !== "" || filterPriority !== "" || filterLabel !== "";
+  const hasFilter = searchQuery.trim() !== "" || filterPriority !== "" || filterLabel !== "" || sortBy !== "";
 
   const matchesFilter = (card: { title: string; details: string; priority?: string | null; labels?: string[] }) => {
     if (!hasFilter) return true;
@@ -481,6 +532,28 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
     const priorityMatch = !filterPriority || card.priority === filterPriority;
     const labelMatch = !filterLabel || (card.labels || []).includes(filterLabel);
     return textMatch && priorityMatch && labelMatch;
+  };
+
+  const priorityOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
+
+  const sortCards = (cards: typeof board.cards[string][]) => {
+    if (!sortBy) return cards;
+    return [...cards].sort((a, b) => {
+      if (sortBy === "priority") {
+        const pa = priorityOrder[a.priority || ""] ?? 3;
+        const pb = priorityOrder[b.priority || ""] ?? 3;
+        return pa - pb;
+      }
+      if (sortBy === "due_date") {
+        const da = a.due_date || "9999-99-99";
+        const db = b.due_date || "9999-99-99";
+        return da.localeCompare(db);
+      }
+      if (sortBy === "title") {
+        return a.title.localeCompare(b.title);
+      }
+      return 0;
+    });
   };
 
   return (
@@ -631,10 +704,21 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
             <option value="design">Design</option>
             <option value="research">Research</option>
           </select>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="rounded-lg border border-[var(--stroke)] bg-[var(--surface)] px-2 py-1.5 text-xs text-[var(--navy-dark)] outline-none"
+            data-testid="sort-select"
+          >
+            <option value="">No sort</option>
+            <option value="priority">Priority</option>
+            <option value="due_date">Due date</option>
+            <option value="title">Title</option>
+          </select>
           {hasFilter && (
             <button
               type="button"
-              onClick={() => { setSearchQuery(""); setFilterPriority(""); setFilterLabel(""); }}
+              onClick={() => { setSearchQuery(""); setFilterPriority(""); setFilterLabel(""); setSortBy(""); }}
               className="rounded-lg border border-[var(--stroke)] px-2.5 py-1.5 text-xs font-medium text-[var(--gray-text)] transition hover:text-[var(--navy-dark)]"
               data-testid="clear-filters"
             >
@@ -655,7 +739,7 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
                 <KanbanColumn
                   column={column}
                   columnIndex={index}
-                  cards={column.cardIds.map((cardId) => board.cards[cardId]).filter(Boolean).filter(matchesFilter)}
+                  cards={sortCards(column.cardIds.map((cardId) => board.cards[cardId]).filter(Boolean).filter(matchesFilter))}
                   onRename={handleRenameColumn}
                   onAddCard={handleAddCard}
                   onDeleteCard={handleDeleteCard}
@@ -663,6 +747,9 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
                   onDeleteColumn={board.columns.length > 1 ? handleDeleteColumn : undefined}
                   onAddComment={handleAddComment}
                   onDeleteComment={handleDeleteComment}
+                  onAddChecklistItem={handleAddChecklistItem}
+                  onToggleChecklistItem={handleToggleChecklistItem}
+                  onDeleteChecklistItem={handleDeleteChecklistItem}
                 />
               </div>
             ))}

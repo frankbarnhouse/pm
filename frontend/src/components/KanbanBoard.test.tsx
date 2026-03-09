@@ -219,10 +219,11 @@ describe("KanbanBoard", () => {
     });
   });
 
-  it("shows search input and priority filter", async () => {
+  it("shows search input, priority filter, and sort select", async () => {
     await setupBoard();
     expect(screen.getByTestId("card-search")).toBeInTheDocument();
     expect(screen.getByTestId("priority-filter")).toBeInTheDocument();
+    expect(screen.getByTestId("sort-select")).toBeInTheDocument();
   });
 
   it("filters cards by search text", async () => {

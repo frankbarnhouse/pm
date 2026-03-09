@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import type { BoardMeta } from "@/lib/kanban";
+import type { BoardMeta, BoardTemplate } from "@/lib/kanban";
 
 type BoardDashboardProps = {
   onSelectBoard: (boardId: number) => void;
@@ -14,6 +14,8 @@ export const BoardDashboard = ({ onSelectBoard }: BoardDashboardProps) => {
   const [showArchived, setShowArchived] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  const [newTemplate, setNewTemplate] = useState("blank");
+  const [templates, setTemplates] = useState<BoardTemplate[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -41,7 +43,20 @@ export const BoardDashboard = ({ onSelectBoard }: BoardDashboardProps) => {
 
   useEffect(() => {
     void loadBoards();
+    void loadTemplates();
   }, []);
+
+  const loadTemplates = async () => {
+    try {
+      const response = await fetch("/api/boards/templates");
+      if (response.ok) {
+        const data = await response.json();
+        setTemplates(data.templates || []);
+      }
+    } catch {
+      // Silently fail - templates are optional
+    }
+  };
 
   const handleCreateBoard = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -54,6 +69,7 @@ export const BoardDashboard = ({ onSelectBoard }: BoardDashboardProps) => {
         body: JSON.stringify({
           title: newTitle.trim(),
           description: newDescription.trim(),
+          template: newTemplate,
         }),
       });
       if (response.status === 401) {
@@ -65,6 +81,7 @@ export const BoardDashboard = ({ onSelectBoard }: BoardDashboardProps) => {
       }
       setNewTitle("");
       setNewDescription("");
+      setNewTemplate("blank");
       setIsCreating(false);
       await loadBoards();
     } catch {
@@ -290,6 +307,26 @@ export const BoardDashboard = ({ onSelectBoard }: BoardDashboardProps) => {
                   className="w-full resize-none rounded-xl border border-[var(--stroke)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--gray-text)] outline-none transition focus:border-[var(--primary-blue)]"
                 />
               </div>
+              {templates.length > 0 && (
+                <div>
+                  <label htmlFor="board-template" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)]">
+                    Template
+                  </label>
+                  <select
+                    id="board-template"
+                    value={newTemplate}
+                    onChange={(e) => setNewTemplate(e.target.value)}
+                    className="w-full rounded-xl border border-[var(--stroke)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--navy-dark)] outline-none"
+                    data-testid="board-template-select"
+                  >
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.column_count} columns)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="flex gap-3">
                 <button
                   type="submit"
@@ -299,7 +336,7 @@ export const BoardDashboard = ({ onSelectBoard }: BoardDashboardProps) => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setIsCreating(false); setNewTitle(""); setNewDescription(""); }}
+                  onClick={() => { setIsCreating(false); setNewTitle(""); setNewDescription(""); setNewTemplate("blank"); }}
                   className="rounded-full border border-[var(--stroke)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)] transition hover:text-[var(--navy-dark)]"
                 >
                   Cancel

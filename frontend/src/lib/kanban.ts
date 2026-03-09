@@ -10,11 +10,24 @@ export const LABEL_COLORS: Record<CardLabel, { bg: string; text: string; name: s
   research: { bg: "bg-cyan-100", text: "text-cyan-700", name: "Research" },
 };
 
+export type ChecklistItem = {
+  id: string;
+  text: string;
+  done: boolean;
+};
+
 export type CardComment = {
   id: string;
   text: string;
   author: string;
   created_at: string;
+};
+
+export type BoardTemplate = {
+  id: string;
+  name: string;
+  description: string;
+  column_count: number;
 };
 
 export type Card = {
@@ -25,6 +38,7 @@ export type Card = {
   due_date?: string | null;
   labels?: CardLabel[];
   comments?: CardComment[];
+  checklist?: ChecklistItem[];
 };
 
 export type Column = {

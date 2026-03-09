@@ -24,6 +24,9 @@ type KanbanColumnProps = {
   onDeleteColumn?: (columnId: string) => void;
   onAddComment?: (cardId: string, text: string) => void;
   onDeleteComment?: (cardId: string, commentId: string) => void;
+  onAddChecklistItem?: (cardId: string, text: string) => void;
+  onToggleChecklistItem?: (cardId: string, itemId: string) => void;
+  onDeleteChecklistItem?: (cardId: string, itemId: string) => void;
 };
 
 export const KanbanColumn = ({
@@ -37,6 +40,9 @@ export const KanbanColumn = ({
   onDeleteColumn,
   onAddComment,
   onDeleteComment,
+  onAddChecklistItem,
+  onToggleChecklistItem,
+  onDeleteChecklistItem,
 }: KanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const accentColor = columnAccentColors[columnIndex % columnAccentColors.length];
@@ -89,6 +95,9 @@ export const KanbanColumn = ({
               onUpdateCard={onUpdateCard}
               onAddComment={onAddComment}
               onDeleteComment={onDeleteComment}
+              onAddChecklistItem={onAddChecklistItem}
+              onToggleChecklistItem={onToggleChecklistItem}
+              onDeleteChecklistItem={onDeleteChecklistItem}
             />
           ))}
         </SortableContext>

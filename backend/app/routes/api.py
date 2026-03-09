@@ -31,15 +31,19 @@ from app.database import (
     write_user_board,
 )
 from app.models import (
+    AddChecklistItemOperation,
+    AddChecklistItemRequest,
     AddCommentOperation,
     AddCommentRequest,
     AIChatResultPayload,
+    DeleteChecklistItemOperation,
     BoardPayload,
     ChangePasswordRequest,
     ChatMessagePayload,
     CreateBoardRequest,
     DeleteCommentOperation,
     ImportBoardRequest,
+    ToggleChecklistItemOperation,
     UpdateBoardMetaRequest,
     UpdateProfileRequest,
 )
@@ -130,10 +134,31 @@ def get_boards(request: Request, include_archived: bool = False) -> dict:
     return {"boards": boards}
 
 
+@router.get("/boards/templates")
+def get_board_templates(request: Request) -> dict:
+    require_api_user(request)
+    from app.database import BOARD_TEMPLATE_DATA
+    templates = []
+    descriptions = {
+        "blank": "Basic kanban board with Backlog, In Progress, Review, and Done columns.",
+        "scrum": "Scrum-style board with Product Backlog, Sprint Backlog, In Progress, Review, Testing, and Done.",
+        "bug_tracking": "Bug tracking workflow: Reported, Confirmed, Fixing, Testing, Closed.",
+        "product_launch": "Product launch pipeline: Ideas, Research, Design, Development, Launch, Post-Launch.",
+    }
+    for key in BOARD_TEMPLATE_DATA:
+        templates.append({
+            "id": key,
+            "name": key.replace("_", " ").title(),
+            "description": descriptions.get(key, ""),
+            "column_count": len(BOARD_TEMPLATE_DATA[key]["columns"]),
+        })
+    return {"templates": templates}
+
+
 @router.post("/boards", status_code=201)
 def create_new_board(request: Request, payload: CreateBoardRequest) -> dict:
     user = require_api_user(request)
-    board = create_board(user["id"], payload.title, payload.description)
+    board = create_board(user["id"], payload.title, payload.description, template=payload.template)
     log_activity(board["id"], user["id"], "board_created", f"Created board '{payload.title}'")
     return {"board": board}
 
@@ -264,6 +289,47 @@ def delete_comment(request: Request, board_id: int, card_id: str, comment_id: st
     try:
         updated = apply_board_operations(board, [
             DeleteCommentOperation(type="delete_comment", card_id=card_id, comment_id=comment_id),
+        ])
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    write_board_data(board_id, user["id"], updated)
+    return {"deleted": True}
+
+
+@router.post("/boards/{board_id}/cards/{card_id}/checklist", status_code=201)
+def add_checklist_item(request: Request, board_id: int, card_id: str, payload: AddChecklistItemRequest) -> dict:
+    user = require_api_user(request)
+    board = read_board_data(board_id, user["id"])
+    updated = apply_board_operations(board, [
+        AddChecklistItemOperation(type="add_checklist_item", card_id=card_id, text=payload.text),
+    ])
+    write_board_data(board_id, user["id"], updated)
+    card = updated["cards"][card_id]
+    return {"item": card["checklist"][-1]}
+
+
+@router.post("/boards/{board_id}/cards/{card_id}/checklist/{item_id}/toggle")
+def toggle_checklist_item(request: Request, board_id: int, card_id: str, item_id: str) -> dict:
+    user = require_api_user(request)
+    board = read_board_data(board_id, user["id"])
+    try:
+        updated = apply_board_operations(board, [
+            ToggleChecklistItemOperation(type="toggle_checklist_item", card_id=card_id, item_id=item_id),
+        ])
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    write_board_data(board_id, user["id"], updated)
+    item = next(i for i in updated["cards"][card_id]["checklist"] if i["id"] == item_id)
+    return {"item": item}
+
+
+@router.delete("/boards/{board_id}/cards/{card_id}/checklist/{item_id}")
+def delete_checklist_item(request: Request, board_id: int, card_id: str, item_id: str) -> dict:
+    user = require_api_user(request)
+    board = read_board_data(board_id, user["id"])
+    try:
+        updated = apply_board_operations(board, [
+            DeleteChecklistItemOperation(type="delete_checklist_item", card_id=card_id, item_id=item_id),
         ])
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

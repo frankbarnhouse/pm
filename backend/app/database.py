@@ -418,22 +418,61 @@ def list_user_boards_with_counts(user_id: int, include_archived: bool = False) -
     return boards
 
 
+BOARD_TEMPLATE_DATA: dict[str, dict] = {
+    "blank": {
+        "columns": [
+            {"id": "col-backlog", "title": "Backlog", "cardIds": []},
+            {"id": "col-progress", "title": "In Progress", "cardIds": []},
+            {"id": "col-review", "title": "Review", "cardIds": []},
+            {"id": "col-done", "title": "Done", "cardIds": []},
+        ],
+        "cards": {},
+    },
+    "scrum": {
+        "columns": [
+            {"id": "col-backlog", "title": "Product Backlog", "cardIds": []},
+            {"id": "col-sprint", "title": "Sprint Backlog", "cardIds": []},
+            {"id": "col-progress", "title": "In Progress", "cardIds": []},
+            {"id": "col-review", "title": "In Review", "cardIds": []},
+            {"id": "col-testing", "title": "Testing", "cardIds": []},
+            {"id": "col-done", "title": "Done", "cardIds": []},
+        ],
+        "cards": {},
+    },
+    "bug_tracking": {
+        "columns": [
+            {"id": "col-reported", "title": "Reported", "cardIds": []},
+            {"id": "col-confirmed", "title": "Confirmed", "cardIds": []},
+            {"id": "col-fixing", "title": "Fixing", "cardIds": []},
+            {"id": "col-testing", "title": "Testing", "cardIds": []},
+            {"id": "col-closed", "title": "Closed", "cardIds": []},
+        ],
+        "cards": {},
+    },
+    "product_launch": {
+        "columns": [
+            {"id": "col-ideas", "title": "Ideas", "cardIds": []},
+            {"id": "col-research", "title": "Research", "cardIds": []},
+            {"id": "col-design", "title": "Design", "cardIds": []},
+            {"id": "col-development", "title": "Development", "cardIds": []},
+            {"id": "col-launch", "title": "Launch", "cardIds": []},
+            {"id": "col-post", "title": "Post-Launch", "cardIds": []},
+        ],
+        "cards": {},
+    },
+}
+
+
 def create_board(
     user_id: int,
     title: str,
     description: str = "",
     board_json: dict | None = None,
+    template: str = "blank",
 ) -> dict:
     if board_json is None:
-        board_json = {
-            "columns": [
-                {"id": "col-backlog", "title": "Backlog", "cardIds": []},
-                {"id": "col-progress", "title": "In Progress", "cardIds": []},
-                {"id": "col-review", "title": "Review", "cardIds": []},
-                {"id": "col-done", "title": "Done", "cardIds": []},
-            ],
-            "cards": {},
-        }
+        import copy
+        board_json = copy.deepcopy(BOARD_TEMPLATE_DATA.get(template, BOARD_TEMPLATE_DATA["blank"]))
 
     with db_connection() as connection:
         cursor = connection.execute(

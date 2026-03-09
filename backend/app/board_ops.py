@@ -151,5 +151,44 @@ def apply_board_operations(current_board: dict, operations: list[BoardOperation]
             card["comments"] = [c for c in comments if c["id"] != operation.comment_id]
             continue
 
+        if operation.type == "add_checklist_item":
+            card = board["cards"].get(operation.card_id)
+            if card is None:
+                raise ValueError(f"Unknown card_id: {operation.card_id}")
+            if "checklist" not in card or card["checklist"] is None:
+                card["checklist"] = []
+            item_id = f"chk-{len(card['checklist']) + 1}"
+            card["checklist"].append({
+                "id": item_id,
+                "text": operation.text,
+                "done": False,
+            })
+            continue
+
+        if operation.type == "toggle_checklist_item":
+            card = board["cards"].get(operation.card_id)
+            if card is None:
+                raise ValueError(f"Unknown card_id: {operation.card_id}")
+            checklist = card.get("checklist") or []
+            found = False
+            for item in checklist:
+                if item["id"] == operation.item_id:
+                    item["done"] = not item["done"]
+                    found = True
+                    break
+            if not found:
+                raise ValueError(f"Unknown checklist item_id: {operation.item_id}")
+            continue
+
+        if operation.type == "delete_checklist_item":
+            card = board["cards"].get(operation.card_id)
+            if card is None:
+                raise ValueError(f"Unknown card_id: {operation.card_id}")
+            checklist = card.get("checklist") or []
+            if not any(item["id"] == operation.item_id for item in checklist):
+                raise ValueError(f"Unknown checklist item_id: {operation.item_id}")
+            card["checklist"] = [item for item in checklist if item["id"] != operation.item_id]
+            continue
+
     # Reuse BoardPayload validation before persisting the update.
     return BoardPayload.model_validate(board).model_dump()
