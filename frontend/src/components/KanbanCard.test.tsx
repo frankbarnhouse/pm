@@ -153,6 +153,8 @@ describe("KanbanCard", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: /edit details for editable/i }));
     expect(screen.getByTestId("card-details-modal")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^title$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^details$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/priority/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/due date/i)).toBeInTheDocument();
   });
@@ -171,7 +173,7 @@ describe("KanbanCard", () => {
     expect(screen.queryByTestId("card-details-modal")).not.toBeInTheDocument();
   });
 
-  it("saves priority and due date from modal", async () => {
+  it("saves all fields from modal", async () => {
     const onUpdateCard = vi.fn();
     render(
       <KanbanCard
@@ -181,6 +183,11 @@ describe("KanbanCard", () => {
       />
     );
     await userEvent.click(screen.getByRole("button", { name: /edit details for editable/i }));
+    // Edit title
+    const titleInput = screen.getByLabelText(/^title$/i);
+    await userEvent.clear(titleInput);
+    await userEvent.type(titleInput, "Updated Title");
+    // Edit priority
     await userEvent.selectOptions(screen.getByLabelText(/priority/i), "high");
     // Change due date
     const dateInput = screen.getByLabelText(/due date/i);
@@ -188,6 +195,8 @@ describe("KanbanCard", () => {
     await userEvent.type(dateInput, "2026-12-25");
     await userEvent.click(screen.getByRole("button", { name: /save/i }));
     expect(onUpdateCard).toHaveBeenCalledWith("c1", {
+      title: "Updated Title",
+      details: "info",
       priority: "high",
       due_date: "2026-12-25",
     });
@@ -206,9 +215,30 @@ describe("KanbanCard", () => {
     await userEvent.selectOptions(screen.getByLabelText(/priority/i), "");
     await userEvent.click(screen.getByRole("button", { name: /save/i }));
     expect(onUpdateCard).toHaveBeenCalledWith("c1", {
+      title: "Editable",
+      details: "info",
       priority: null,
       due_date: null,
     });
+  });
+
+  it("edits card details in modal", async () => {
+    const onUpdateCard = vi.fn();
+    render(
+      <KanbanCard
+        card={{ id: "c1", title: "Task", details: "old info" }}
+        onDelete={vi.fn()}
+        onUpdateCard={onUpdateCard}
+      />
+    );
+    await userEvent.click(screen.getByRole("button", { name: /edit details for task/i }));
+    const detailsInput = screen.getByLabelText(/^details$/i);
+    await userEvent.clear(detailsInput);
+    await userEvent.type(detailsInput, "new details");
+    await userEvent.click(screen.getByRole("button", { name: /save/i }));
+    expect(onUpdateCard).toHaveBeenCalledWith("c1", expect.objectContaining({
+      details: "new details",
+    }));
   });
 
   it("has correct data-testid", () => {

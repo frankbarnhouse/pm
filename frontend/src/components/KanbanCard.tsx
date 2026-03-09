@@ -13,7 +13,7 @@ const priorityStyles: Record<string, { dot: string; label: string }> = {
 type KanbanCardProps = {
   card: Card;
   onDelete: (cardId: string) => void;
-  onUpdateCard?: (cardId: string, updates: { priority?: "low" | "medium" | "high" | null; due_date?: string | null }) => void;
+  onUpdateCard?: (cardId: string, updates: { title?: string; details?: string; priority?: "low" | "medium" | "high" | null; due_date?: string | null }) => void;
 };
 
 export const KanbanCard = ({ card, onDelete, onUpdateCard }: KanbanCardProps) => {
@@ -144,15 +144,19 @@ export const KanbanCard = ({ card, onDelete, onUpdateCard }: KanbanCardProps) =>
 type CardDetailsModalProps = {
   card: Card;
   onClose: () => void;
-  onUpdate: (updates: { priority?: "low" | "medium" | "high" | null; due_date?: string | null }) => void;
+  onUpdate: (updates: { title?: string; details?: string; priority?: "low" | "medium" | "high" | null; due_date?: string | null }) => void;
 };
 
 const CardDetailsModal = ({ card, onClose, onUpdate }: CardDetailsModalProps) => {
+  const [title, setTitle] = useState(card.title);
+  const [details, setDetails] = useState(card.details);
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "">(card.priority || "");
   const [dueDate, setDueDate] = useState(card.due_date || "");
 
   const handleSave = () => {
     onUpdate({
+      title: title.trim() || card.title,
+      details: details.trim(),
       priority: priority || null,
       due_date: dueDate || null,
     });
@@ -167,14 +171,33 @@ const CardDetailsModal = ({ card, onClose, onUpdate }: CardDetailsModalProps) =>
         aria-label="Close card details"
       />
       <div className="fixed left-1/2 top-1/2 z-50 w-[90vw] max-w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[var(--stroke)] bg-white p-6 shadow-[0_18px_40px_rgba(3,33,71,0.16)]" data-testid="card-details-modal">
-        <h3 className="mb-4 font-display text-lg font-semibold text-[var(--navy-dark)]">
-          {card.title}
-        </h3>
-        {card.details && (
-          <p className="mb-4 text-sm leading-6 text-[var(--gray-text)]">{card.details}</p>
-        )}
-
         <div className="space-y-4">
+          <div>
+            <label htmlFor="card-title" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)]">
+              Title
+            </label>
+            <input
+              id="card-title"
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full rounded-xl border border-[var(--stroke)] bg-[var(--surface)] px-3 py-2 text-sm font-semibold text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="card-details" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)]">
+              Details
+            </label>
+            <textarea
+              id="card-details"
+              value={details}
+              onChange={(e) => setDetails(e.target.value)}
+              rows={3}
+              className="w-full resize-none rounded-xl border border-[var(--stroke)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
+            />
+          </div>
+
           <div>
             <label htmlFor="card-priority" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)]">
               Priority

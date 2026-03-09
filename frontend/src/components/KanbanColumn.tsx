@@ -20,7 +20,7 @@ type KanbanColumnProps = {
   onRename: (columnId: string, title: string) => void;
   onAddCard: (columnId: string, title: string, details: string) => void;
   onDeleteCard: (columnId: string, cardId: string) => void;
-  onUpdateCard?: (cardId: string, updates: { priority?: "low" | "medium" | "high" | null; due_date?: string | null }) => void;
+  onUpdateCard?: (cardId: string, updates: { title?: string; details?: string; priority?: "low" | "medium" | "high" | null; due_date?: string | null }) => void;
   onDeleteColumn?: (columnId: string) => void;
 };
 

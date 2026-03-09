@@ -118,6 +118,43 @@ def delete_board_by_id(request: Request, board_id: int) -> dict:
     return {"deleted": True}
 
 
+@router.get("/boards/{board_id}/stats")
+def get_board_stats(request: Request, board_id: int) -> dict:
+    user = require_api_user(request)
+    board = read_board_data(board_id, user["id"])
+    cards = board.get("cards", {})
+    columns = board.get("columns", [])
+
+    total_cards = len(cards)
+    by_priority = {"high": 0, "medium": 0, "low": 0, "none": 0}
+    overdue_count = 0
+    from datetime import date
+
+    today = date.today().isoformat()
+    for card in cards.values():
+        p = card.get("priority")
+        if p in by_priority:
+            by_priority[p] += 1
+        else:
+            by_priority["none"] += 1
+        due = card.get("due_date")
+        if due and due < today:
+            overdue_count += 1
+
+    cards_per_column = [
+        {"column_id": col["id"], "title": col["title"], "count": len(col.get("cardIds", []))}
+        for col in columns
+    ]
+
+    return {
+        "total_cards": total_cards,
+        "total_columns": len(columns),
+        "by_priority": by_priority,
+        "overdue_count": overdue_count,
+        "cards_per_column": cards_per_column,
+    }
+
+
 @router.post("/boards/{board_id}/chat")
 def board_chat(request: Request, board_id: int, payload: ChatMessagePayload) -> dict[str, str | bool | None]:
     user = require_api_user(request)

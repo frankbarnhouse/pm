@@ -380,7 +380,7 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
     });
   };
 
-  const handleUpdateCard = (cardId: string, updates: { priority?: "low" | "medium" | "high" | null; due_date?: string | null }) => {
+  const handleUpdateCard = (cardId: string, updates: { title?: string; details?: string; priority?: "low" | "medium" | "high" | null; due_date?: string | null }) => {
     updateBoard((previous) => ({
       ...previous,
       cards: {
