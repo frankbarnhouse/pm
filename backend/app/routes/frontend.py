@@ -39,7 +39,7 @@ def home(request: Request) -> Response:
 def frontend_routes(request: Request, full_path: str) -> Response:
     if full_path.startswith("api/"):
         raise HTTPException(status_code=404, detail="Not found")
-    if full_path.startswith("auth/") or full_path == "login":
+    if full_path.startswith("auth/") or full_path in ("login", "register"):
         raise HTTPException(status_code=404, detail="Not found")
 
     if current_user(request) is None:

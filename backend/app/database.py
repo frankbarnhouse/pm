@@ -83,6 +83,14 @@ def _table_columns(connection: sqlite3.Connection, table_name: str) -> set[str]:
     return {row["name"] for row in rows}
 
 
+def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
+    row = connection.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
 def _migrate_users_table(connection: sqlite3.Connection) -> set[str]:
     user_columns = _table_columns(connection, "users")
 
@@ -93,6 +101,12 @@ def _migrate_users_table(connection: sqlite3.Connection) -> set[str]:
     if "password_salt" not in user_columns:
         connection.execute("ALTER TABLE users ADD COLUMN password_salt TEXT")
         user_columns.add("password_salt")
+
+    if "display_name" not in user_columns:
+        connection.execute(
+            "ALTER TABLE users ADD COLUMN display_name TEXT NOT NULL DEFAULT ''"
+        )
+        user_columns.add("display_name")
 
     if "password_plaintext" in user_columns:
         legacy_users = connection.execute(
@@ -119,27 +133,70 @@ def _migrate_users_table(connection: sqlite3.Connection) -> set[str]:
     return user_columns
 
 
+def _migrate_boards_table(connection: sqlite3.Connection) -> None:
+    board_columns = _table_columns(connection, "boards")
+
+    if "description" not in board_columns:
+        connection.execute(
+            "ALTER TABLE boards ADD COLUMN description TEXT NOT NULL DEFAULT ''"
+        )
+
+    # Remove UNIQUE constraint on user_id if it exists.
+    # SQLite requires table recreation to drop constraints.
+    index_info = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='boards'"
+    ).fetchone()
+    if index_info and "UNIQUE" in (index_info["sql"] or ""):
+        connection.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS boards_new (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              user_id INTEGER NOT NULL,
+              title TEXT NOT NULL DEFAULT 'Kanban Board',
+              description TEXT NOT NULL DEFAULT '',
+              board_json TEXT NOT NULL,
+              created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+              updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+              FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            INSERT INTO boards_new (id, user_id, title, board_json, created_at, updated_at)
+            SELECT id, user_id, title, board_json, created_at, updated_at FROM boards;
+
+            DROP TABLE boards;
+
+            ALTER TABLE boards_new RENAME TO boards;
+            """
+        )
+
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_boards_user_id ON boards(user_id)"
+    )
+
+
 def initialize_database() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     with db_connection() as connection:
         connection.executescript(
             """
-            PRAGMA user_version = 2;
+            PRAGMA user_version = 3;
 
             CREATE TABLE IF NOT EXISTS users (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               username TEXT NOT NULL UNIQUE,
               password_hash TEXT NOT NULL,
               password_salt TEXT NOT NULL,
+              display_name TEXT NOT NULL DEFAULT '',
               created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
               updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
             );
 
             CREATE TABLE IF NOT EXISTS boards (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
-              user_id INTEGER NOT NULL UNIQUE,
+              user_id INTEGER NOT NULL,
               title TEXT NOT NULL DEFAULT 'Kanban Board',
+              description TEXT NOT NULL DEFAULT '',
               board_json TEXT NOT NULL,
               created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
               updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -152,6 +209,8 @@ def initialize_database() -> None:
         )
 
         user_columns = _migrate_users_table(connection)
+        if _table_exists(connection, "boards"):
+            _migrate_boards_table(connection)
 
         salt = secrets.token_hex(16)
         hashed = hash_password(MVP_PASSWORD, salt)
@@ -183,14 +242,23 @@ def initialize_database() -> None:
         if user_id_row is None:
             raise RuntimeError("Failed to initialize MVP user")
 
-        connection.execute(
-            """
-            INSERT INTO boards (user_id, title, board_json)
-            VALUES (?, 'Kanban Board', ?)
-            ON CONFLICT(user_id) DO NOTHING
-            """,
-            (user_id_row["id"], json.dumps(INITIAL_BOARD)),
-        )
+        # Seed a default board only if the MVP user has none
+        existing_boards = connection.execute(
+            "SELECT id FROM boards WHERE user_id = ?",
+            (user_id_row["id"],),
+        ).fetchone()
+
+        if existing_boards is None:
+            connection.execute(
+                """
+                INSERT INTO boards (user_id, title, description, board_json)
+                VALUES (?, 'My First Board', 'Default project board', ?)
+                """,
+                (user_id_row["id"], json.dumps(INITIAL_BOARD)),
+            )
+
+
+# --- User operations ---
 
 
 def get_user_by_username(username: str | None) -> sqlite3.Row | None:
@@ -199,7 +267,7 @@ def get_user_by_username(username: str | None) -> sqlite3.Row | None:
 
     with db_connection() as connection:
         return connection.execute(
-            "SELECT id, username, password_hash, password_salt FROM users WHERE username = ?",
+            "SELECT id, username, password_hash, password_salt, display_name FROM users WHERE username = ?",
             (username,),
         ).fetchone()
 
@@ -212,10 +280,170 @@ def verify_credentials(username: str, password: str) -> bool:
     return user["password_hash"] == expected_hash
 
 
+def create_user(username: str, password: str, display_name: str = "") -> int:
+    salt = secrets.token_hex(16)
+    hashed = hash_password(password, salt)
+
+    with db_connection() as connection:
+        cursor = connection.execute(
+            """
+            INSERT INTO users (username, password_hash, password_salt, display_name)
+            VALUES (?, ?, ?, ?)
+            """,
+            (username, hashed, salt, display_name),
+        )
+        user_id = cursor.lastrowid
+
+        # Create a default board for the new user
+        connection.execute(
+            """
+            INSERT INTO boards (user_id, title, description, board_json)
+            VALUES (?, 'My First Board', 'Your default project board', ?)
+            """,
+            (user_id, json.dumps(INITIAL_BOARD)),
+        )
+
+        return user_id
+
+
+def username_exists(username: str) -> bool:
+    with db_connection() as connection:
+        row = connection.execute(
+            "SELECT 1 FROM users WHERE username = ?",
+            (username,),
+        ).fetchone()
+        return row is not None
+
+
+# --- Board operations ---
+
+
+def list_user_boards(user_id: int) -> list[dict]:
+    with db_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, title, description, created_at, updated_at
+            FROM boards
+            WHERE user_id = ?
+            ORDER BY updated_at DESC
+            """,
+            (user_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def create_board(
+    user_id: int,
+    title: str,
+    description: str = "",
+    board_json: dict | None = None,
+) -> dict:
+    if board_json is None:
+        board_json = {
+            "columns": [
+                {"id": "col-backlog", "title": "Backlog", "cardIds": []},
+                {"id": "col-progress", "title": "In Progress", "cardIds": []},
+                {"id": "col-review", "title": "Review", "cardIds": []},
+                {"id": "col-done", "title": "Done", "cardIds": []},
+            ],
+            "cards": {},
+        }
+
+    with db_connection() as connection:
+        cursor = connection.execute(
+            """
+            INSERT INTO boards (user_id, title, description, board_json)
+            VALUES (?, ?, ?, ?)
+            """,
+            (user_id, title, description, json.dumps(board_json)),
+        )
+        row = connection.execute(
+            "SELECT id, title, description, created_at, updated_at FROM boards WHERE id = ?",
+            (cursor.lastrowid,),
+        ).fetchone()
+    return dict(row)
+
+
+def get_board(board_id: int, user_id: int) -> dict:
+    with db_connection() as connection:
+        row = connection.execute(
+            "SELECT id, title, description, board_json, user_id FROM boards WHERE id = ? AND user_id = ?",
+            (board_id, user_id),
+        ).fetchone()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="Board not found")
+    return dict(row)
+
+
+def read_board_data(board_id: int, user_id: int) -> dict:
+    board_row = get_board(board_id, user_id)
+    return json.loads(board_row["board_json"])
+
+
+def write_board_data(board_id: int, user_id: int, board: dict) -> None:
+    with db_connection() as connection:
+        result = connection.execute(
+            """
+            UPDATE boards
+            SET board_json = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            WHERE id = ? AND user_id = ?
+            """,
+            (json.dumps(board), board_id, user_id),
+        )
+
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Board not found")
+
+
+def update_board_meta(board_id: int, user_id: int, title: str | None = None, description: str | None = None) -> dict:
+    with db_connection() as connection:
+        updates = []
+        params: list = []
+        if title is not None:
+            updates.append("title = ?")
+            params.append(title)
+        if description is not None:
+            updates.append("description = ?")
+            params.append(description)
+
+        if not updates:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
+        updates.append("updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')")
+        params.extend([board_id, user_id])
+
+        result = connection.execute(
+            f"UPDATE boards SET {', '.join(updates)} WHERE id = ? AND user_id = ?",
+            params,
+        )
+
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Board not found")
+
+        row = connection.execute(
+            "SELECT id, title, description, created_at, updated_at FROM boards WHERE id = ?",
+            (board_id,),
+        ).fetchone()
+    return dict(row)
+
+
+def delete_board(board_id: int, user_id: int) -> bool:
+    with db_connection() as connection:
+        result = connection.execute(
+            "DELETE FROM boards WHERE id = ? AND user_id = ?",
+            (board_id, user_id),
+        )
+        return result.rowcount > 0
+
+
+# Legacy compatibility wrappers (used by old single-board code paths)
+
+
 def read_user_board(user_id: int) -> dict:
     with db_connection() as connection:
         row = connection.execute(
-            "SELECT board_json FROM boards WHERE user_id = ?",
+            "SELECT board_json FROM boards WHERE user_id = ? ORDER BY id LIMIT 1",
             (user_id,),
         ).fetchone()
 
@@ -230,9 +458,9 @@ def write_user_board(user_id: int, board: dict) -> None:
             """
             UPDATE boards
             SET board_json = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-            WHERE user_id = ?
+            WHERE user_id = ? AND id = (SELECT id FROM boards WHERE user_id = ? ORDER BY id LIMIT 1)
             """,
-            (json.dumps(board), user_id),
+            (json.dumps(board), user_id, user_id),
         )
 
         if result.rowcount == 0:

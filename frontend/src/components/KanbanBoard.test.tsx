@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { initialData } from "@/lib/kanban";
 
+const BOARD_ID = 1;
+
 const getFirstColumn = () => screen.getAllByTestId(/column-/i)[0];
 
 const waitForBoardLoad = async () => {
@@ -25,7 +27,7 @@ const mockBoardApi = (options?: {
     const url = typeof input === "string" ? input : input.toString();
     const method = init?.method ?? "GET";
 
-    if (url === "/api/chat" && method === "POST") {
+    if (url === `/api/boards/${BOARD_ID}/chat` && method === "POST") {
       if (options?.chatResponse?.board_updated && options.boardAfterChat) {
         boardState = JSON.parse(
           JSON.stringify(options.boardAfterChat)
@@ -46,7 +48,7 @@ const mockBoardApi = (options?: {
       );
     }
 
-    if (url === "/api/board" && method === "PUT") {
+    if (url === `/api/boards/${BOARD_ID}` && method === "PUT") {
       const requestBody = JSON.parse((init?.body as string) || "{}");
       boardState = requestBody;
       return new Response(JSON.stringify({ board: requestBody }), {
@@ -55,11 +57,14 @@ const mockBoardApi = (options?: {
       });
     }
 
-    if (url === "/api/board") {
-      return new Response(JSON.stringify({ board: boardState }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+    if (url === `/api/boards/${BOARD_ID}`) {
+      return new Response(
+        JSON.stringify({ id: BOARD_ID, title: "My First Board", description: "", board: boardState }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
     }
 
     return new Response(JSON.stringify({ error: "Not found" }), {
@@ -72,12 +77,14 @@ const mockBoardApi = (options?: {
   return fetchMock;
 };
 
+const noop = () => {};
+
 const setupBoard = async (options?: {
   chatResponse?: { assistant_message: string; board_updated: boolean };
   boardAfterChat?: typeof initialData;
 }) => {
   const fetchMock = mockBoardApi(options);
-  render(<KanbanBoard />);
+  render(<KanbanBoard boardId={BOARD_ID} onBack={noop} />);
   await waitForBoardLoad();
   return fetchMock;
 };
@@ -93,6 +100,16 @@ describe("KanbanBoard", () => {
     expect(screen.getAllByTestId(/column-/i)).toHaveLength(5);
   });
 
+  it("shows the board title", async () => {
+    await setupBoard();
+    expect(screen.getByText("My First Board")).toBeInTheDocument();
+  });
+
+  it("shows back-to-boards button", async () => {
+    await setupBoard();
+    expect(screen.getByTestId("back-to-boards")).toBeInTheDocument();
+  });
+
   it("renames a column", async () => {
     const fetchMock = await setupBoard();
     const column = getFirstColumn();
@@ -101,7 +118,7 @@ describe("KanbanBoard", () => {
     expect(input).toHaveValue("New Name");
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/api/board",
+        `/api/boards/${BOARD_ID}`,
         expect.objectContaining({ method: "PUT" })
       );
     });
@@ -195,7 +212,7 @@ describe("KanbanBoard", () => {
       const boardGetCalls = fetchMock.mock.calls.filter(
         (call: [RequestInfo | URL, RequestInit?]) => {
           const [url, init] = call;
-          return url === "/api/board" && (!init || !init.method || init.method === "GET");
+          return url === `/api/boards/${BOARD_ID}` && (!init || !init.method || init.method === "GET");
         }
       );
       expect(boardGetCalls.length).toBeGreaterThanOrEqual(2);

@@ -15,8 +15,14 @@ import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { createId, initialData, moveCard, type BoardData } from "@/lib/kanban";
 
-export const KanbanBoard = () => {
+type KanbanBoardProps = {
+  boardId: number;
+  onBack: () => void;
+};
+
+export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
   const [board, setBoard] = useState<BoardData>(() => initialData);
+  const [boardTitle, setBoardTitle] = useState("Board");
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
@@ -56,7 +62,7 @@ export const KanbanBoard = () => {
 
     const loadBoard = async () => {
       try {
-        const response = await fetch("/api/board");
+        const response = await fetch(`/api/boards/${boardId}`);
         if (response.status === 401) {
           window.location.assign("/login");
           return;
@@ -65,13 +71,16 @@ export const KanbanBoard = () => {
           throw new Error(`Failed to load board: ${response.status}`);
         }
 
-        const payload = (await response.json()) as { board?: BoardData };
+        const payload = (await response.json()) as { board?: BoardData; title?: string };
         if (!payload.board) {
           throw new Error("Board payload missing");
         }
 
         if (!cancelled) {
           setBoard(payload.board);
+          if (payload.title) {
+            setBoardTitle(payload.title);
+          }
         }
       } catch {
         if (!cancelled) {
@@ -98,7 +107,7 @@ export const KanbanBoard = () => {
         window.clearTimeout(persistTimerRef.current);
       }
     };
-  }, []);
+  }, [boardId]);
 
   useEffect(() => {
     if (skipNextPersistRef.current) {
@@ -175,7 +184,7 @@ export const KanbanBoard = () => {
 
   const persistBoard = async (nextBoard: BoardData) => {
     try {
-      const response = await fetch("/api/board", {
+      const response = await fetch(`/api/boards/${boardId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -198,7 +207,7 @@ export const KanbanBoard = () => {
   };
 
   const loadBoardForRefresh = async (): Promise<BoardData | null> => {
-    const response = await fetch("/api/board");
+    const response = await fetch(`/api/boards/${boardId}`);
     if (response.status === 401) {
       window.location.assign("/login");
       return null;
@@ -238,7 +247,7 @@ export const KanbanBoard = () => {
     setChatStatus("Thinking...");
 
     try {
-      const response = await fetch("/api/chat", {
+      const response = await fetch(`/api/boards/${boardId}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -368,6 +377,16 @@ export const KanbanBoard = () => {
     });
   };
 
+  const handleUpdateCard = (cardId: string, updates: { priority?: "low" | "medium" | "high" | null; due_date?: string | null }) => {
+    updateBoard((previous) => ({
+      ...previous,
+      cards: {
+        ...previous.cards,
+        [cardId]: { ...previous.cards[cardId], ...updates },
+      },
+    }));
+  };
+
   const activeCard = activeCardId ? board.cards[activeCardId] : null;
 
   return (
@@ -378,9 +397,20 @@ export const KanbanBoard = () => {
       <main className="relative mx-auto flex min-h-screen max-w-[1800px] flex-col gap-6 px-4 pb-12 pt-6 lg:px-8">
         <header className="flex items-center justify-between gap-4 rounded-2xl border border-[var(--stroke)] bg-white/80 px-6 py-4 shadow-[0_4px_16px_rgba(3,33,71,0.06)] backdrop-blur">
           <div className="flex items-center gap-5">
+            <button
+              type="button"
+              onClick={onBack}
+              className="rounded-lg p-1.5 text-[var(--gray-text)] transition hover:bg-[var(--surface)] hover:text-[var(--navy-dark)]"
+              aria-label="Back to boards"
+              data-testid="back-to-boards"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
             <div>
               <h1 className="font-display text-xl font-semibold text-[var(--navy-dark)]">
-                Kanban Studio
+                {boardTitle}
               </h1>
               <p className="text-xs text-[var(--gray-text)]">
                 Drag cards between columns to track progress
@@ -430,6 +460,7 @@ export const KanbanBoard = () => {
                 onRename={handleRenameColumn}
                 onAddCard={handleAddCard}
                 onDeleteCard={handleDeleteCard}
+                onUpdateCard={handleUpdateCard}
               />
             ))}
           </section>

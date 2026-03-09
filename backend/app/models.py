@@ -7,6 +7,8 @@ class CardPayload(BaseModel):
     id: str
     title: str
     details: str
+    priority: Literal["low", "medium", "high"] | None = None
+    due_date: str | None = None
 
 
 class ColumnPayload(BaseModel):
@@ -113,3 +115,37 @@ class BoardUpdatePayload(BaseModel):
 class AIChatResultPayload(BaseModel):
     assistant_message: str
     board_update: BoardUpdatePayload | None = None
+
+
+# --- Multi-board API models ---
+
+
+class CreateBoardRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=100)
+    description: str = ""
+
+
+class UpdateBoardMetaRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = None
+
+    @model_validator(mode="after")
+    def validate_has_fields(self) -> "UpdateBoardMetaRequest":
+        if self.title is None and self.description is None:
+            raise ValueError("At least one of title or description is required")
+        return self
+
+
+# --- Registration model ---
+
+
+class RegisterRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=30)
+    password: str = Field(min_length=4, max_length=100)
+    display_name: str = ""
+
+    @model_validator(mode="after")
+    def validate_username_chars(self) -> "RegisterRequest":
+        if not self.username.replace("_", "").replace("-", "").isalnum():
+            raise ValueError("Username may only contain letters, numbers, hyphens, and underscores")
+        return self

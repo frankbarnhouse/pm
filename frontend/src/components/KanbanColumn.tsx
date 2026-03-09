@@ -20,6 +20,7 @@ type KanbanColumnProps = {
   onRename: (columnId: string, title: string) => void;
   onAddCard: (columnId: string, title: string, details: string) => void;
   onDeleteCard: (columnId: string, cardId: string) => void;
+  onUpdateCard?: (cardId: string, updates: { priority?: "low" | "medium" | "high" | null; due_date?: string | null }) => void;
 };
 
 export const KanbanColumn = ({
@@ -29,6 +30,7 @@ export const KanbanColumn = ({
   onRename,
   onAddCard,
   onDeleteCard,
+  onUpdateCard,
 }: KanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const accentColor = columnAccentColors[columnIndex % columnAccentColors.length];
@@ -64,6 +66,7 @@ export const KanbanColumn = ({
               key={card.id}
               card={card}
               onDelete={(cardId) => onDeleteCard(column.id, cardId)}
+              onUpdateCard={onUpdateCard}
             />
           ))}
         </SortableContext>

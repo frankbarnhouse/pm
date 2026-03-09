@@ -2,6 +2,8 @@ export type Card = {
   id: string;
   title: string;
   details: string;
+  priority?: "low" | "medium" | "high" | null;
+  due_date?: string | null;
 };
 
 export type Column = {
@@ -13,6 +15,14 @@ export type Column = {
 export type BoardData = {
   columns: Column[];
   cards: Record<string, Card>;
+};
+
+export type BoardMeta = {
+  id: number;
+  title: string;
+  description: string;
+  created_at: string;
+  updated_at: string;
 };
 
 export const initialData: BoardData = {

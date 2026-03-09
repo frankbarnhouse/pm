@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AI-powered Kanban project management app. Next.js frontend + Python FastAPI backend, packaged in Docker. Users interact with a drag-and-drop board; an AI chat sidebar can create/edit/move/delete cards via OpenAI structured outputs.
+AI-powered Kanban project management app with multi-user and multi-board support. Next.js frontend + Python FastAPI backend, packaged in Docker. Users manage multiple Kanban boards with drag-and-drop; an AI chat sidebar can create/edit/move/delete cards via OpenAI structured outputs. Cards support priority levels and due dates.
 
 ## Commands
 
@@ -28,31 +28,41 @@ AI-powered Kanban project management app. Next.js frontend + Python FastAPI back
 
 ## Architecture
 
-**Frontend** (`frontend/`): Next.js 16, React 19, TypeScript strict mode, Tailwind CSS v4, @dnd-kit for drag-and-drop. Statically exported and served by the backend. Board state lives in React `useState`, loaded from `GET /api/board` on mount, persisted via `PUT /api/board`.
+**Frontend** (`frontend/`): Next.js 16, React 19, TypeScript strict mode, Tailwind CSS v4, @dnd-kit for drag-and-drop. Statically exported and served by the backend. SPA with two views:
+- `BoardDashboard` - lists user's boards, create/edit/delete boards
+- `KanbanBoard` - full board view with columns, cards, drag-and-drop, AI chat
+
+Board state lives in React `useState`, loaded from `GET /api/boards/{id}` on mount, persisted via `PUT /api/boards/{id}`.
 
 **Backend** (`backend/app/`): Modular FastAPI app. `main.py` is the thin entry point (app creation, lifespan, router wiring). Domain logic is split into:
-- `models.py` - Pydantic models (board, card, column, operation payloads)
-- `database.py` - SQLite connection, schema init/migration, board CRUD, credential verification
+- `models.py` - Pydantic models (board, card, column, operation payloads, registration, board CRUD)
+- `database.py` - SQLite connection, schema init/migration, user CRUD, multi-board CRUD, credential verification
 - `board_ops.py` - Board operation logic (apply operations atomically)
 - `session.py` - In-memory session store, chat history, auth helpers (current_user, require_api_user)
-- `login_page.py` - Login HTML template
+- `login_page.py` - Login and registration HTML templates
 - `ai_client.py` - OpenAI integration (connectivity check, structured chat)
-- `routes/api.py` - API endpoints (health, board, AI connectivity, chat)
-- `routes/auth.py` - Login/logout page routes
+- `routes/api.py` - API endpoints (health, boards CRUD, AI connectivity, chat)
+- `routes/auth.py` - Login/logout/registration page routes
 - `routes/frontend.py` - Static frontend serving, FRONTEND_DIST_DIR
 
-SQLite database at `backend/data/app.db` stores board state as JSON blob. Session-based auth with HTTP-only cookies (server-side token store).
+SQLite database at `backend/data/app.db` stores board state as JSON blob. Session-based auth with HTTP-only cookies (server-side token store). Users can self-register.
 
 **AI Chat Flow**: User prompt + current board state + conversation history sent to OpenAI structured outputs API. Response includes assistant message and optional `board_update` with operations (`create_card`, `edit_card`, `move_card`, `delete_card`, `rename_column`). Operations are validated and applied atomically. Chat history is in-memory per session.
 
 **API Routes**:
-- `GET/PUT /api/board` - board state (auth required)
-- `POST /api/chat` - AI chat with structured board operations (auth required)
+- `GET /api/boards` - list user's boards (auth required)
+- `POST /api/boards` - create board (auth required)
+- `GET/PUT /api/boards/{id}` - board data (auth required)
+- `PATCH /api/boards/{id}` - update board title/description (auth required)
+- `DELETE /api/boards/{id}` - delete board (auth required)
+- `POST /api/boards/{id}/chat` - AI chat for specific board (auth required)
+- `GET/PUT /api/board` - legacy single-board endpoints (auth required)
+- `POST /api/chat` - legacy AI chat (auth required)
 - `POST /api/ai/connectivity` - OpenAI smoke test (auth required)
 - `GET /api/health` - health check
-- `POST /auth/login`, `POST /auth/logout` - session auth
+- `POST /auth/login`, `POST /auth/register`, `POST /auth/logout` - session auth
 
-**Board Data Model**: Columns have ordered `cardIds` arrays; cards stored in a flat `cards` dict keyed by ID. Pydantic validates referential integrity on every write.
+**Board Data Model**: Columns have ordered `cardIds` arrays; cards stored in a flat `cards` dict keyed by ID. Cards optionally have `priority` (low/medium/high) and `due_date`. Pydantic validates referential integrity on every write. Each user can have multiple boards.
 
 ## Key Conventions
 
@@ -60,11 +70,12 @@ SQLite database at `backend/data/app.db` stores board state as JSON blob. Sessio
 - KISS: no over-engineering, no unnecessary defensive programming
 - Diagnose root causes with evidence before fixing issues
 - Frontend expects backend at same origin (`/api/*`, `/auth/*`)
-- Preserve test IDs used by unit/e2e tests (`column-*`, `card-*`)
+- Preserve test IDs used by unit/e2e tests (`column-*`, `card-*`, `board-card-*`, `open-board-*`)
 - Prefer pure helper functions for board operations to keep tests simple
 - OpenAI model configurable via `OPENAI_MODEL` env var (default: `gpt-4.1-mini`)
-- MVP auth: hardcoded credentials `user` / `password`
+- Default MVP user: `user` / `password` (new users can self-register)
 - Planning docs live in `docs/` (PLAN.md, DATA_MODEL.md)
+- Boards are isolated per user (user A cannot access user B's boards)
 
 ## Color Scheme
 
