@@ -91,6 +91,20 @@ def change_password(request: Request, payload: ChangePasswordRequest) -> dict:
 # --- Multi-board endpoints ---
 
 
+@router.get("/dashboard/stats")
+def get_dashboard_stats(request: Request) -> dict:
+    user = require_api_user(request)
+    boards = list_user_boards_with_counts(user["id"])
+    total_boards = len(boards)
+    total_cards = sum(b["card_count"] for b in boards)
+    total_columns = sum(b["column_count"] for b in boards)
+    return {
+        "total_boards": total_boards,
+        "total_cards": total_cards,
+        "total_columns": total_columns,
+    }
+
+
 @router.get("/boards")
 def get_boards(request: Request, include_archived: bool = False) -> dict:
     user = require_api_user(request)

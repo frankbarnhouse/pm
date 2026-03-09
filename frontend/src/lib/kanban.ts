@@ -34,6 +34,7 @@ export type BoardMeta = {
   id: number;
   title: string;
   description: string;
+  archived?: boolean;
   card_count?: number;
   column_count?: number;
   created_at: string;

@@ -11,15 +11,18 @@ export const BoardDashboard = ({ onSelectBoard }: BoardDashboardProps) => {
   const [boards, setBoards] = useState<BoardMeta[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
 
-  const loadBoards = async () => {
+  const loadBoards = async (includeArchived?: boolean) => {
     try {
-      const response = await fetch("/api/boards");
+      const archived = includeArchived ?? showArchived;
+      const url = archived ? "/api/boards?include_archived=true" : "/api/boards";
+      const response = await fetch(url);
       if (response.status === 401) {
         window.location.assign("/login");
         return;
@@ -82,6 +85,32 @@ export const BoardDashboard = ({ onSelectBoard }: BoardDashboardProps) => {
     }
   };
 
+  const handleArchiveBoard = async (boardId: number) => {
+    try {
+      const response = await fetch(`/api/boards/${boardId}/archive`, {
+        method: "POST",
+      });
+      if (response.ok) {
+        await loadBoards();
+      }
+    } catch {
+      // Silently fail
+    }
+  };
+
+  const handleUnarchiveBoard = async (boardId: number) => {
+    try {
+      const response = await fetch(`/api/boards/${boardId}/unarchive`, {
+        method: "POST",
+      });
+      if (response.ok) {
+        await loadBoards();
+      }
+    } catch {
+      // Silently fail
+    }
+  };
+
   const handleDeleteBoard = async (boardId: number) => {
     try {
       const response = await fetch(`/api/boards/${boardId}`, {
@@ -114,6 +143,29 @@ export const BoardDashboard = ({ onSelectBoard }: BoardDashboardProps) => {
     }
   };
 
+  const handleExportBoard = async (boardId: number, boardTitle: string) => {
+    try {
+      const response = await fetch(`/api/boards/${boardId}`);
+      if (!response.ok) return;
+      const data = await response.json();
+      const blob = new Blob([JSON.stringify(data.board, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${boardTitle.replace(/[^a-zA-Z0-9]/g, "_")}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // Silently fail
+    }
+  };
+
+  const toggleShowArchived = async () => {
+    const next = !showArchived;
+    setShowArchived(next);
+    await loadBoards(next);
+  };
+
   const startEditing = (board: BoardMeta) => {
     setEditingId(board.id);
     setEditTitle(board.title);
@@ -128,6 +180,10 @@ export const BoardDashboard = ({ onSelectBoard }: BoardDashboardProps) => {
       year: "numeric",
     });
   };
+
+  const activeBoards = boards.filter((b) => !b.archived);
+  const totalCards = activeBoards.reduce((sum, b) => sum + (b.card_count ?? 0), 0);
+  const totalColumns = activeBoards.reduce((sum, b) => sum + (b.column_count ?? 0), 0);
 
   return (
     <div className="relative overflow-hidden">
@@ -172,6 +228,35 @@ export const BoardDashboard = ({ onSelectBoard }: BoardDashboardProps) => {
             </form>
           </div>
         </header>
+
+        {!isLoading && activeBoards.length > 0 && (
+          <div className="flex items-center gap-4 rounded-2xl border border-[var(--stroke)] bg-white/80 px-6 py-3 shadow-[0_2px_8px_rgba(3,33,71,0.04)] backdrop-blur" data-testid="dashboard-stats">
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-semibold text-[var(--navy-dark)]">{activeBoards.length}</span>
+              <span className="text-xs text-[var(--gray-text)]">{activeBoards.length === 1 ? "board" : "boards"}</span>
+            </div>
+            <div className="h-4 w-px bg-[var(--stroke)]" />
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-semibold text-[var(--navy-dark)]">{totalCards}</span>
+              <span className="text-xs text-[var(--gray-text)]">{totalCards === 1 ? "card" : "cards"}</span>
+            </div>
+            <div className="h-4 w-px bg-[var(--stroke)]" />
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-semibold text-[var(--navy-dark)]">{totalColumns}</span>
+              <span className="text-xs text-[var(--gray-text)]">{totalColumns === 1 ? "column" : "columns"}</span>
+            </div>
+            <div className="ml-auto">
+              <button
+                type="button"
+                onClick={toggleShowArchived}
+                className="text-xs font-medium text-[var(--gray-text)] transition hover:text-[var(--navy-dark)]"
+                data-testid="toggle-archived"
+              >
+                {showArchived ? "Hide archived" : "Show archived"}
+              </button>
+            </div>
+          </div>
+        )}
 
         {isCreating && (
           <div className="rounded-2xl border border-[var(--stroke)] bg-white p-6 shadow-[0_4px_16px_rgba(3,33,71,0.06)]">
@@ -244,7 +329,7 @@ export const BoardDashboard = ({ onSelectBoard }: BoardDashboardProps) => {
             {boards.map((board) => (
               <div
                 key={board.id}
-                className="group relative flex flex-col rounded-2xl border border-[var(--stroke)] bg-white p-5 shadow-[0_4px_12px_rgba(3,33,71,0.06)] transition-all hover:shadow-[0_8px_20px_rgba(3,33,71,0.10)]"
+                className={`group relative flex flex-col rounded-2xl border border-[var(--stroke)] bg-white p-5 shadow-[0_4px_12px_rgba(3,33,71,0.06)] transition-all hover:shadow-[0_8px_20px_rgba(3,33,71,0.10)] ${board.archived ? "opacity-60" : ""}`}
                 data-testid={`board-card-${board.id}`}
               >
                 {editingId === board.id ? (
@@ -285,9 +370,16 @@ export const BoardDashboard = ({ onSelectBoard }: BoardDashboardProps) => {
                       className="flex-1 text-left"
                       data-testid={`open-board-${board.id}`}
                     >
-                      <h3 className="font-display text-base font-semibold text-[var(--navy-dark)]">
-                        {board.title}
-                      </h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-display text-base font-semibold text-[var(--navy-dark)]">
+                          {board.title}
+                        </h3>
+                        {board.archived && (
+                          <span className="rounded-md bg-[var(--surface)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--gray-text)]" data-testid={`archived-badge-${board.id}`}>
+                            Archived
+                          </span>
+                        )}
+                      </div>
                       {board.description && (
                         <p className="mt-1 text-xs leading-5 text-[var(--gray-text)]">
                           {board.description}
@@ -327,6 +419,47 @@ export const BoardDashboard = ({ onSelectBoard }: BoardDashboardProps) => {
                           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                         </svg>
                       </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); void handleExportBoard(board.id, board.title); }}
+                        className="rounded-lg p-1.5 text-[var(--gray-text)] transition hover:bg-[var(--surface)] hover:text-[var(--primary-blue)]"
+                        aria-label={`Export ${board.title}`}
+                        data-testid={`export-board-${board.id}`}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                          <polyline points="7 10 12 15 17 10" />
+                          <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                      </button>
+                      {board.archived ? (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleUnarchiveBoard(board.id); }}
+                          className="rounded-lg p-1.5 text-[var(--gray-text)] transition hover:bg-green-50 hover:text-green-600"
+                          aria-label={`Unarchive ${board.title}`}
+                          data-testid={`unarchive-board-${board.id}`}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <polyline points="1 4 1 10 7 10" />
+                            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleArchiveBoard(board.id); }}
+                          className="rounded-lg p-1.5 text-[var(--gray-text)] transition hover:bg-amber-50 hover:text-amber-600"
+                          aria-label={`Archive ${board.title}`}
+                          data-testid={`archive-board-${board.id}`}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <polyline points="21 8 21 21 3 21 3 8" />
+                            <rect x="1" y="3" width="22" height="5" />
+                            <line x1="10" y1="12" x2="14" y2="12" />
+                          </svg>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); handleDeleteBoard(board.id); }}
