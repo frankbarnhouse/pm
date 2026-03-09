@@ -505,6 +505,38 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
     setIsActivityOpen((prev) => !prev);
   };
 
+  const handleClearColumn = async (columnId: string) => {
+    try {
+      const response = await fetch(`/api/boards/${boardId}/columns/${columnId}/clear`, { method: "POST" });
+      if (!response.ok) throw new Error("Failed to clear column");
+      const refreshed = await loadBoardForRefresh();
+      if (refreshed) {
+        skipNextPersistRef.current = true;
+        setBoard(refreshed);
+      }
+    } catch {
+      showTransientSyncStatus("Failed to clear column.");
+    }
+  };
+
+  const handleSetWipLimit = async (columnId: string, limit: number | null) => {
+    try {
+      const response = await fetch(`/api/boards/${boardId}/columns/${columnId}/wip-limit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wip_limit: limit }),
+      });
+      if (!response.ok) throw new Error("Failed to set WIP limit");
+      const refreshed = await loadBoardForRefresh();
+      if (refreshed) {
+        skipNextPersistRef.current = true;
+        setBoard(refreshed);
+      }
+    } catch {
+      showTransientSyncStatus("Failed to set WIP limit.");
+    }
+  };
+
   const handleDeleteColumn = (columnId: string) => {
     updateBoard((previous) => ({
       ...previous,
@@ -750,6 +782,8 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
                   onAddChecklistItem={handleAddChecklistItem}
                   onToggleChecklistItem={handleToggleChecklistItem}
                   onDeleteChecklistItem={handleDeleteChecklistItem}
+                  onClearColumn={handleClearColumn}
+                  onSetWipLimit={handleSetWipLimit}
                 />
               </div>
             ))}

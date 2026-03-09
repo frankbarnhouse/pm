@@ -27,6 +27,8 @@ type KanbanColumnProps = {
   onAddChecklistItem?: (cardId: string, text: string) => void;
   onToggleChecklistItem?: (cardId: string, itemId: string) => void;
   onDeleteChecklistItem?: (cardId: string, itemId: string) => void;
+  onClearColumn?: (columnId: string) => void;
+  onSetWipLimit?: (columnId: string, limit: number | null) => void;
 };
 
 export const KanbanColumn = ({
@@ -43,15 +45,20 @@ export const KanbanColumn = ({
   onAddChecklistItem,
   onToggleChecklistItem,
   onDeleteChecklistItem,
+  onClearColumn,
+  onSetWipLimit,
 }: KanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
   const accentColor = columnAccentColors[columnIndex % columnAccentColors.length];
+  const wipLimit = column.wip_limit;
+  const isOverWip = wipLimit != null && wipLimit > 0 && cards.length > wipLimit;
 
   return (
     <section
       ref={setNodeRef}
       className={clsx(
-        "flex min-h-[480px] flex-col rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] p-3 transition",
+        "flex min-h-[480px] flex-col rounded-2xl border bg-[var(--surface)] p-3 transition",
+        isOverWip ? "border-red-300" : "border-[var(--stroke)]",
         isOver && "ring-2 ring-[var(--accent-yellow)]"
       )}
       data-testid={`column-${column.id}`}
@@ -66,8 +73,14 @@ export const KanbanColumn = ({
             className="min-w-0 flex-1 bg-transparent font-display text-sm font-semibold text-[var(--navy-dark)] outline-none"
             aria-label={`Title for ${column.title}`}
           />
-          <span className="flex-shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold tabular-nums text-[var(--gray-text)]">
-            {cards.length}
+          <span
+            className={clsx(
+              "flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums",
+              isOverWip ? "bg-red-100 text-red-600" : "bg-white text-[var(--gray-text)]"
+            )}
+            data-testid={`card-count-${column.id}`}
+          >
+            {cards.length}{wipLimit != null && wipLimit > 0 ? `/${wipLimit}` : ""}
           </span>
           {onDeleteColumn && (
             <button
@@ -84,6 +97,37 @@ export const KanbanColumn = ({
             </button>
           )}
         </div>
+        {(onClearColumn || onSetWipLimit) && (
+          <div className="mt-1.5 flex items-center gap-2">
+            {onSetWipLimit && (
+              <select
+                value={wipLimit ?? ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  onSetWipLimit(column.id, val === "" ? null : parseInt(val, 10));
+                }}
+                className="rounded-md border border-[var(--stroke)] bg-white px-1.5 py-0.5 text-[10px] text-[var(--gray-text)] outline-none"
+                aria-label={`WIP limit for ${column.title}`}
+                data-testid={`wip-limit-${column.id}`}
+              >
+                <option value="">No limit</option>
+                {[1, 2, 3, 5, 8, 10, 15, 20].map((n) => (
+                  <option key={n} value={n}>Max {n}</option>
+                ))}
+              </select>
+            )}
+            {onClearColumn && cards.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onClearColumn(column.id)}
+                className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-[var(--gray-text)] transition hover:bg-red-50 hover:text-red-500"
+                data-testid={`clear-column-${column.id}`}
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <div className="flex flex-1 flex-col gap-2">
         <SortableContext items={column.cardIds} strategy={verticalListSortingStrategy}>

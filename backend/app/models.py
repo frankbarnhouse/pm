@@ -34,6 +34,7 @@ class ColumnPayload(BaseModel):
     id: str
     title: str
     cardIds: list[str]
+    wip_limit: int | None = None
 
 
 class BoardPayload(BaseModel):
@@ -147,6 +148,17 @@ class DeleteCommentOperation(BaseModel):
     comment_id: str
 
 
+class SetWipLimitOperation(BaseModel):
+    type: Literal["set_wip_limit"]
+    column_id: str
+    wip_limit: int | None = None
+
+
+class ClearColumnOperation(BaseModel):
+    type: Literal["clear_column"]
+    column_id: str
+
+
 class AddChecklistItemOperation(BaseModel):
     type: Literal["add_checklist_item"]
     card_id: str
@@ -176,6 +188,8 @@ BoardOperation = Annotated[
     | MoveColumnOperation
     | AddCommentOperation
     | DeleteCommentOperation
+    | SetWipLimitOperation
+    | ClearColumnOperation
     | AddChecklistItemOperation
     | ToggleChecklistItemOperation
     | DeleteChecklistItemOperation,

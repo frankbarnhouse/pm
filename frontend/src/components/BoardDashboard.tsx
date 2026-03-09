@@ -19,6 +19,7 @@ export const BoardDashboard = ({ onSelectBoard }: BoardDashboardProps) => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const loadBoards = async (includeArchived?: boolean) => {
     try {
@@ -362,8 +363,31 @@ export const BoardDashboard = ({ onSelectBoard }: BoardDashboardProps) => {
             </button>
           </div>
         ) : (
+          <>
+            {boards.length > 1 && (
+              <div className="mb-4">
+                <div className="relative">
+                  <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--gray-text)]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Search boards..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full rounded-xl border border-[var(--stroke)] bg-[var(--surface)] py-2 pl-9 pr-3 text-sm text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
+                    data-testid="board-search"
+                  />
+                </div>
+              </div>
+            )}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="board-list">
-            {boards.map((board) => (
+            {boards.filter((b) => {
+              if (!searchQuery.trim()) return true;
+              const q = searchQuery.toLowerCase();
+              return b.title.toLowerCase().includes(q) || (b.description || "").toLowerCase().includes(q);
+            }).map((board) => (
               <div
                 key={board.id}
                 className={`group relative flex flex-col rounded-2xl border border-[var(--stroke)] bg-white p-5 shadow-[0_4px_12px_rgba(3,33,71,0.06)] transition-all hover:shadow-[0_8px_20px_rgba(3,33,71,0.10)] ${board.archived ? "opacity-60" : ""}`}
@@ -515,6 +539,7 @@ export const BoardDashboard = ({ onSelectBoard }: BoardDashboardProps) => {
               </div>
             ))}
           </div>
+          </>
         )}
       </main>
     </div>

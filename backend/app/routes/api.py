@@ -36,6 +36,7 @@ from app.models import (
     AddCommentOperation,
     AddCommentRequest,
     AIChatResultPayload,
+    ClearColumnOperation,
     DeleteChecklistItemOperation,
     BoardPayload,
     ChangePasswordRequest,
@@ -43,6 +44,7 @@ from app.models import (
     CreateBoardRequest,
     DeleteCommentOperation,
     ImportBoardRequest,
+    SetWipLimitOperation,
     ToggleChecklistItemOperation,
     UpdateBoardMetaRequest,
     UpdateProfileRequest,
@@ -335,6 +337,36 @@ def delete_checklist_item(request: Request, board_id: int, card_id: str, item_id
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     write_board_data(board_id, user["id"], updated)
     return {"deleted": True}
+
+
+@router.post("/boards/{board_id}/columns/{column_id}/wip-limit")
+def set_wip_limit(request: Request, board_id: int, column_id: str, payload: dict) -> dict:
+    user = require_api_user(request)
+    board = read_board_data(board_id, user["id"])
+    wip_limit = payload.get("wip_limit")
+    try:
+        updated = apply_board_operations(board, [
+            SetWipLimitOperation(type="set_wip_limit", column_id=column_id, wip_limit=wip_limit),
+        ])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    write_board_data(board_id, user["id"], updated)
+    return {"wip_limit": wip_limit}
+
+
+@router.post("/boards/{board_id}/columns/{column_id}/clear")
+def clear_column(request: Request, board_id: int, column_id: str) -> dict:
+    user = require_api_user(request)
+    board = read_board_data(board_id, user["id"])
+    try:
+        updated = apply_board_operations(board, [
+            ClearColumnOperation(type="clear_column", column_id=column_id),
+        ])
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    write_board_data(board_id, user["id"], updated)
+    log_activity(board_id, user["id"], "column_cleared", f"Cleared column {column_id}")
+    return {"cleared": True}
 
 
 @router.post("/boards/{board_id}/chat")

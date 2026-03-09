@@ -126,6 +126,21 @@ def apply_board_operations(current_board: dict, operations: list[BoardOperation]
             board["columns"].insert(pos, column)
             continue
 
+        if operation.type == "set_wip_limit":
+            column = _find_column(board, operation.column_id)
+            if operation.wip_limit is not None and operation.wip_limit < 0:
+                raise ValueError("WIP limit must be non-negative")
+            column["wip_limit"] = operation.wip_limit
+            continue
+
+        if operation.type == "clear_column":
+            column = _find_column(board, operation.column_id)
+            for card_id in column["cardIds"]:
+                if card_id in board["cards"]:
+                    del board["cards"][card_id]
+            column["cardIds"] = []
+            continue
+
         if operation.type == "add_comment":
             card = board["cards"].get(operation.card_id)
             if card is None:

@@ -4,6 +4,7 @@ from app.board_ops import apply_board_operations
 from app.models import (
     AddColumnOperation,
     AddCommentOperation,
+    ClearColumnOperation,
     CreateCardOperation,
     DeleteCardOperation,
     DeleteColumnOperation,
@@ -12,6 +13,7 @@ from app.models import (
     MoveCardOperation,
     MoveColumnOperation,
     RenameColumnOperation,
+    SetWipLimitOperation,
 )
 
 
@@ -358,4 +360,81 @@ def test_delete_comment_unknown_comment_raises() -> None:
     with pytest.raises(ValueError, match="Unknown comment_id"):
         apply_board_operations(board, [
             DeleteCommentOperation(type="delete_comment", card_id="card-1", comment_id="cmt-missing"),
+        ])
+
+
+# --- WIP Limit tests ---
+
+
+def test_set_wip_limit() -> None:
+    board = _make_board()
+    result = apply_board_operations(board, [
+        SetWipLimitOperation(type="set_wip_limit", column_id="col-1", wip_limit=3),
+    ])
+    assert result["columns"][0]["wip_limit"] == 3
+
+
+def test_set_wip_limit_to_none() -> None:
+    board = _make_board(
+        columns=[
+            {"id": "col-1", "title": "Todo", "cardIds": ["card-1"], "wip_limit": 5},
+            {"id": "col-2", "title": "Done", "cardIds": ["card-2"]},
+        ],
+    )
+    result = apply_board_operations(board, [
+        SetWipLimitOperation(type="set_wip_limit", column_id="col-1", wip_limit=None),
+    ])
+    assert result["columns"][0]["wip_limit"] is None
+
+
+def test_set_wip_limit_negative_raises() -> None:
+    board = _make_board()
+    with pytest.raises(ValueError, match="WIP limit must be non-negative"):
+        apply_board_operations(board, [
+            SetWipLimitOperation(type="set_wip_limit", column_id="col-1", wip_limit=-1),
+        ])
+
+
+def test_set_wip_limit_unknown_column_raises() -> None:
+    board = _make_board()
+    with pytest.raises(ValueError, match="Unknown column_id"):
+        apply_board_operations(board, [
+            SetWipLimitOperation(type="set_wip_limit", column_id="col-missing", wip_limit=5),
+        ])
+
+
+# --- Clear Column tests ---
+
+
+def test_clear_column_removes_cards() -> None:
+    board = _make_board()
+    result = apply_board_operations(board, [
+        ClearColumnOperation(type="clear_column", column_id="col-1"),
+    ])
+    assert result["columns"][0]["cardIds"] == []
+    assert "card-1" not in result["cards"]
+    # Cards in other columns remain
+    assert "card-2" in result["cards"]
+
+
+def test_clear_empty_column() -> None:
+    board = _make_board(
+        columns=[
+            {"id": "col-1", "title": "Todo", "cardIds": []},
+            {"id": "col-2", "title": "Done", "cardIds": ["card-2"]},
+        ],
+        cards={"card-2": {"id": "card-2", "title": "Task B", "details": "Details B"}},
+    )
+    result = apply_board_operations(board, [
+        ClearColumnOperation(type="clear_column", column_id="col-1"),
+    ])
+    assert result["columns"][0]["cardIds"] == []
+    assert "card-2" in result["cards"]
+
+
+def test_clear_column_unknown_raises() -> None:
+    board = _make_board()
+    with pytest.raises(ValueError, match="Unknown column_id"):
+        apply_board_operations(board, [
+            ClearColumnOperation(type="clear_column", column_id="col-missing"),
         ])
