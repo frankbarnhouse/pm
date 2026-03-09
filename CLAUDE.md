@@ -30,7 +30,18 @@ AI-powered Kanban project management app. Next.js frontend + Python FastAPI back
 
 **Frontend** (`frontend/`): Next.js 16, React 19, TypeScript strict mode, Tailwind CSS v4, @dnd-kit for drag-and-drop. Statically exported and served by the backend. Board state lives in React `useState`, loaded from `GET /api/board` on mount, persisted via `PUT /api/board`.
 
-**Backend** (`backend/`): Single-file FastAPI app (`app/main.py`) handling auth, board CRUD, AI chat, and static file serving. SQLite database at `backend/data/app.db` stores board state as JSON blob. Session-based auth with HTTP-only cookies. AI integration in `app/ai_client.py`.
+**Backend** (`backend/app/`): Modular FastAPI app. `main.py` is the thin entry point (app creation, lifespan, router wiring). Domain logic is split into:
+- `models.py` - Pydantic models (board, card, column, operation payloads)
+- `database.py` - SQLite connection, schema init/migration, board CRUD, credential verification
+- `board_ops.py` - Board operation logic (apply operations atomically)
+- `session.py` - In-memory session store, chat history, auth helpers (current_user, require_api_user)
+- `login_page.py` - Login HTML template
+- `ai_client.py` - OpenAI integration (connectivity check, structured chat)
+- `routes/api.py` - API endpoints (health, board, AI connectivity, chat)
+- `routes/auth.py` - Login/logout page routes
+- `routes/frontend.py` - Static frontend serving, FRONTEND_DIST_DIR
+
+SQLite database at `backend/data/app.db` stores board state as JSON blob. Session-based auth with HTTP-only cookies (server-side token store).
 
 **AI Chat Flow**: User prompt + current board state + conversation history sent to OpenAI structured outputs API. Response includes assistant message and optional `board_update` with operations (`create_card`, `edit_card`, `move_card`, `delete_card`, `rename_column`). Operations are validated and applied atomically. Chat history is in-memory per session.
 

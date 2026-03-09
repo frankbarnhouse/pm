@@ -1,10 +1,8 @@
 import copy
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from conftest import make_test_client, login_test_client
-from app import main
+from app.routes import api as api_routes
 
 
 def test_chat_requires_authentication(tmp_path: Path) -> None:
@@ -20,7 +18,7 @@ def test_chat_no_update_returns_message(tmp_path: Path, monkeypatch) -> None:
     login_test_client(client)
 
     monkeypatch.setattr(
-        main,
+        api_routes,
         "run_structured_chat",
         lambda **_: {"assistant_message": "No changes", "board_update": None},
     )
@@ -38,7 +36,7 @@ def test_chat_update_is_applied_atomically(tmp_path: Path, monkeypatch) -> None:
     login_test_client(client)
 
     monkeypatch.setattr(
-        main,
+        api_routes,
         "run_structured_chat",
         lambda **_: {
             "assistant_message": "Added card",
@@ -73,7 +71,7 @@ def test_chat_invalid_update_is_rejected_without_partial_write(tmp_path: Path, m
     before_board = client.get("/api/board").json()["board"]
 
     monkeypatch.setattr(
-        main,
+        api_routes,
         "run_structured_chat",
         lambda **_: {
             "assistant_message": "Tried update",
@@ -110,7 +108,7 @@ def test_chat_uses_session_history(tmp_path: Path, monkeypatch) -> None:
         observed_history.append(copy.deepcopy(conversation_history))
         return {"assistant_message": "ok", "board_update": None}
 
-    monkeypatch.setattr(main, "run_structured_chat", _fake_chat)
+    monkeypatch.setattr(api_routes, "run_structured_chat", _fake_chat)
 
     first_response = client.post("/api/chat", json={"prompt": "first"})
     second_response = client.post("/api/chat", json={"prompt": "second"})

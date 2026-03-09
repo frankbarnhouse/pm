@@ -2,10 +2,9 @@ import json
 import sqlite3
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from conftest import make_test_client, login_test_client
-from app import main
+import app.database
+from app.database import initialize_database, verify_credentials
 
 
 def test_db_is_created_and_seeded_on_startup(tmp_path: Path) -> None:
@@ -50,8 +49,8 @@ def test_legacy_users_schema_is_migrated(tmp_path: Path) -> None:
             """
         )
 
-    main.DB_PATH = db_path
-    main._initialize_database()
+    app.database.DB_PATH = db_path
+    initialize_database()
 
     with sqlite3.connect(db_path) as connection:
         user_row = connection.execute(
@@ -62,7 +61,7 @@ def test_legacy_users_schema_is_migrated(tmp_path: Path) -> None:
         assert user_row[0]
         assert user_row[1]
 
-    assert main._verify_credentials("user", "password")
+    assert verify_credentials("user", "password")
 
 
 def test_board_api_requires_authentication(tmp_path: Path) -> None:

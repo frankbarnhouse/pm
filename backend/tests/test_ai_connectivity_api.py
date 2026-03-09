@@ -1,9 +1,8 @@
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 from conftest import make_test_client, login_test_client
-from app import ai_client, main
+from app import ai_client
+from app.routes import api as api_routes
 
 
 def test_connectivity_requires_authentication(tmp_path: Path) -> None:
@@ -18,7 +17,7 @@ def test_connectivity_returns_expected_shape(tmp_path: Path, monkeypatch) -> Non
     client = make_test_client(tmp_path)
     login_test_client(client)
 
-    monkeypatch.setattr(main, "run_connectivity_check", lambda: "4")
+    monkeypatch.setattr(api_routes, "run_connectivity_check", lambda: "4")
 
     response = client.post("/api/ai/connectivity")
 
@@ -35,7 +34,7 @@ def test_connectivity_missing_key_returns_503(tmp_path: Path, monkeypatch) -> No
     login_test_client(client)
 
     monkeypatch.setattr(
-        main,
+        api_routes,
         "run_connectivity_check",
         lambda: (_ for _ in ()).throw(ai_client.MissingApiKeyError("OPENAI_API_KEY is not configured")),
     )
@@ -51,7 +50,7 @@ def test_connectivity_provider_failure_returns_502(tmp_path: Path, monkeypatch) 
     login_test_client(client)
 
     monkeypatch.setattr(
-        main,
+        api_routes,
         "run_connectivity_check",
         lambda: (_ for _ in ()).throw(ai_client.OpenAIConnectivityError("401 unauthorized")),
     )

@@ -1,9 +1,7 @@
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
-from conftest import make_test_client, login_test_client
-from app import main
+from conftest import make_test_client
+from app.session import SESSION_COOKIE
 
 
 def test_unauthenticated_user_is_redirected_to_login(tmp_path: Path) -> None:
@@ -49,8 +47,8 @@ def test_login_success_sets_cookie_and_accesses_board(tmp_path: Path) -> None:
 
     assert login_response.status_code == 303
     assert login_response.headers["location"] == "/"
-    assert main.SESSION_COOKIE in login_response.cookies
-    assert login_response.cookies[main.SESSION_COOKIE]
+    assert SESSION_COOKIE in login_response.cookies
+    assert login_response.cookies[SESSION_COOKIE]
 
     board_response = client.get("/")
     assert board_response.status_code == 200

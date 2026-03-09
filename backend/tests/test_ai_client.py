@@ -22,7 +22,8 @@ class _FakeOpenAIClient:
         return type("Response", (), {"output_text": self._output_text})()
 
 
-def test_missing_api_key_raises() -> None:
+def test_missing_api_key_raises(monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     with pytest.raises(MissingApiKeyError):
         run_connectivity_check(api_key=None, client_factory=lambda **_: _FakeOpenAIClient())
 
