@@ -457,6 +457,20 @@ def update_board_meta(board_id: int, user_id: int, title: str | None = None, des
     return dict(row)
 
 
+def duplicate_board(board_id: int, user_id: int) -> dict:
+    with db_connection() as connection:
+        row = connection.execute(
+            "SELECT title, description, board_json FROM boards WHERE id = ? AND user_id = ?",
+            (board_id, user_id),
+        ).fetchone()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="Board not found")
+
+    new_title = f"{row['title']} (copy)"
+    return create_board(user_id, new_title, row["description"], json.loads(row["board_json"]))
+
+
 def delete_board(board_id: int, user_id: int) -> bool:
     with db_connection() as connection:
         result = connection.execute(

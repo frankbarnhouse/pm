@@ -15,6 +15,7 @@ from app.board_ops import apply_board_operations
 from app.database import (
     create_board,
     delete_board,
+    duplicate_board,
     get_board,
     list_user_boards_with_counts,
     read_board_data,
@@ -99,6 +100,13 @@ def patch_board_meta(request: Request, board_id: int, payload: UpdateBoardMetaRe
     user = require_api_user(request)
     updated = update_board_meta(board_id, user["id"], payload.title, payload.description)
     return {"board": updated}
+
+
+@router.post("/boards/{board_id}/duplicate", status_code=201)
+def duplicate_board_endpoint(request: Request, board_id: int) -> dict:
+    user = require_api_user(request)
+    board = duplicate_board(board_id, user["id"])
+    return {"board": board}
 
 
 @router.delete("/boards/{board_id}")

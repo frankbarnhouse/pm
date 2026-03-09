@@ -244,6 +244,68 @@ def test_board_list_ordered_by_updated_at(tmp_path: Path) -> None:
     assert boards[0]["title"] == "Board C"
 
 
+def test_duplicate_board(tmp_path: Path) -> None:
+    client = make_test_client(tmp_path)
+    login_test_client(client)
+
+    boards = client.get("/api/boards").json()["boards"]
+    board_id = boards[0]["id"]
+
+    response = client.post(f"/api/boards/{board_id}/duplicate")
+
+    assert response.status_code == 201
+    new_board = response.json()["board"]
+    assert new_board["title"] == "My First Board (copy)"
+    assert new_board["id"] != board_id
+
+    # Both boards should exist
+    all_boards = client.get("/api/boards").json()["boards"]
+    assert len(all_boards) == 2
+
+
+def test_duplicate_board_copies_data(tmp_path: Path) -> None:
+    client = make_test_client(tmp_path)
+    login_test_client(client)
+
+    boards = client.get("/api/boards").json()["boards"]
+    board_id = boards[0]["id"]
+
+    original = client.get(f"/api/boards/{board_id}").json()["board"]
+    response = client.post(f"/api/boards/{board_id}/duplicate")
+    new_board_id = response.json()["board"]["id"]
+    copy = client.get(f"/api/boards/{new_board_id}").json()["board"]
+
+    assert len(copy["columns"]) == len(original["columns"])
+    assert len(copy["cards"]) == len(original["cards"])
+
+
+def test_duplicate_nonexistent_board_returns_404(tmp_path: Path) -> None:
+    client = make_test_client(tmp_path)
+    login_test_client(client)
+
+    response = client.post("/api/boards/99999/duplicate")
+    assert response.status_code == 404
+
+
+def test_duplicate_other_users_board_returns_404(tmp_path: Path) -> None:
+    client = make_test_client(tmp_path)
+    login_test_client(client)
+
+    boards = client.get("/api/boards").json()["boards"]
+    board_id = boards[0]["id"]
+
+    # Switch user
+    client.post("/auth/logout", follow_redirects=False)
+    client.post(
+        "/auth/register",
+        data={"username": "other", "password": "secret"},
+        follow_redirects=False,
+    )
+
+    response = client.post(f"/api/boards/{board_id}/duplicate")
+    assert response.status_code == 404
+
+
 def test_create_board_has_empty_columns(tmp_path: Path) -> None:
     client = make_test_client(tmp_path)
     login_test_client(client)

@@ -218,4 +218,46 @@ describe("KanbanBoard", () => {
       expect(boardGetCalls.length).toBeGreaterThanOrEqual(2);
     });
   });
+
+  it("shows search input and priority filter", async () => {
+    await setupBoard();
+    expect(screen.getByTestId("card-search")).toBeInTheDocument();
+    expect(screen.getByTestId("priority-filter")).toBeInTheDocument();
+  });
+
+  it("filters cards by search text", async () => {
+    await setupBoard();
+    expect(screen.getByText("Align roadmap themes")).toBeInTheDocument();
+    expect(screen.getByText("Ship marketing page")).toBeInTheDocument();
+
+    await userEvent.type(screen.getByTestId("card-search"), "roadmap");
+
+    await waitFor(() => {
+      expect(screen.getByText("Align roadmap themes")).toBeInTheDocument();
+      expect(screen.queryByText("Ship marketing page")).not.toBeInTheDocument();
+    });
+  });
+
+  it("shows clear button when filter is active", async () => {
+    await setupBoard();
+    expect(screen.queryByTestId("clear-filters")).not.toBeInTheDocument();
+
+    await userEvent.type(screen.getByTestId("card-search"), "test");
+    expect(screen.getByTestId("clear-filters")).toBeInTheDocument();
+  });
+
+  it("clears filters when clear button is clicked", async () => {
+    await setupBoard();
+    await userEvent.type(screen.getByTestId("card-search"), "roadmap");
+
+    await waitFor(() => {
+      expect(screen.queryByText("Ship marketing page")).not.toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByTestId("clear-filters"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Ship marketing page")).toBeInTheDocument();
+    });
+  });
 });

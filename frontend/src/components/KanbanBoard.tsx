@@ -25,6 +25,8 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
   const [board, setBoard] = useState<BoardData>(() => initialData);
   const [boardTitle, setBoardTitle] = useState("Board");
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterPriority, setFilterPriority] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
@@ -411,6 +413,19 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
 
   const activeCard = activeCardId ? board.cards[activeCardId] : null;
 
+  const hasFilter = searchQuery.trim() !== "" || filterPriority !== "";
+
+  const matchesFilter = (card: { title: string; details: string; priority?: string | null }) => {
+    if (!hasFilter) return true;
+    const query = searchQuery.toLowerCase();
+    const textMatch =
+      !query ||
+      card.title.toLowerCase().includes(query) ||
+      card.details.toLowerCase().includes(query);
+    const priorityMatch = !filterPriority || card.priority === filterPriority;
+    return textMatch && priorityMatch;
+  };
+
   return (
     <div className="relative overflow-hidden">
       <div className="pointer-events-none absolute left-0 top-0 h-[420px] w-[420px] -translate-x-1/3 -translate-y-1/3 rounded-full bg-[radial-gradient(circle,_rgba(32,157,215,0.25)_0%,_rgba(32,157,215,0.05)_55%,_transparent_70%)]" />
@@ -466,6 +481,44 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
           </div>
         </header>
 
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--stroke)] bg-white/80 px-4 py-2.5 shadow-[0_2px_8px_rgba(3,33,71,0.04)] backdrop-blur">
+          <div className="relative flex-1 min-w-[180px]">
+            <svg className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--gray-text)]" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search cards..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-lg border border-[var(--stroke)] bg-[var(--surface)] py-1.5 pl-8 pr-3 text-xs text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)]"
+              data-testid="card-search"
+            />
+          </div>
+          <select
+            value={filterPriority}
+            onChange={(e) => setFilterPriority(e.target.value)}
+            className="rounded-lg border border-[var(--stroke)] bg-[var(--surface)] px-2 py-1.5 text-xs text-[var(--navy-dark)] outline-none"
+            data-testid="priority-filter"
+          >
+            <option value="">All priorities</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+          {hasFilter && (
+            <button
+              type="button"
+              onClick={() => { setSearchQuery(""); setFilterPriority(""); }}
+              className="rounded-lg border border-[var(--stroke)] px-2.5 py-1.5 text-xs font-medium text-[var(--gray-text)] transition hover:text-[var(--navy-dark)]"
+              data-testid="clear-filters"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -478,7 +531,7 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
                 <KanbanColumn
                   column={column}
                   columnIndex={index}
-                  cards={column.cardIds.map((cardId) => board.cards[cardId]).filter(Boolean)}
+                  cards={column.cardIds.map((cardId) => board.cards[cardId]).filter(Boolean).filter(matchesFilter)}
                   onRename={handleRenameColumn}
                   onAddCard={handleAddCard}
                   onDeleteCard={handleDeleteCard}

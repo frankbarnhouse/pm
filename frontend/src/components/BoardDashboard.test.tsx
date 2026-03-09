@@ -59,6 +59,21 @@ const setupDashboard = (options?: { boards?: typeof mockBoards }) => {
         });
       }
 
+      if (url.match(/\/api\/boards\/\d+\/duplicate$/) && method === "POST") {
+        const newBoard = {
+          id: 100,
+          title: "Sprint Board (copy)",
+          description: "",
+          created_at: "2025-06-01T00:00:00Z",
+          updated_at: "2025-06-01T00:00:00Z",
+        };
+        boards.push(newBoard);
+        return new Response(JSON.stringify({ board: newBoard }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
       if (url.match(/\/api\/boards\/\d+$/) && method === "PATCH") {
         return new Response(
           JSON.stringify({ board: { ...boards[0], ...JSON.parse((init?.body as string) || "{}") } }),
@@ -148,6 +163,35 @@ describe("BoardDashboard", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Weekly sprint tracking")).toBeInTheDocument();
+    });
+  });
+
+  it("shows duplicate button for each board", async () => {
+    setupDashboard();
+    render(<BoardDashboard onSelectBoard={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("duplicate-board-1")).toBeInTheDocument();
+    });
+    expect(screen.getByTestId("duplicate-board-2")).toBeInTheDocument();
+  });
+
+  it("calls duplicate API when duplicate button clicked", async () => {
+    setupDashboard();
+    render(<BoardDashboard onSelectBoard={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("duplicate-board-1")).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByTestId("duplicate-board-1"));
+
+    await waitFor(() => {
+      const fetchFn = fetch as ReturnType<typeof vi.fn>;
+      const calls = fetchFn.mock.calls as Array<[string, RequestInit?]>;
+      const duplicateCall = calls.find(
+        ([url, init]) => url === "/api/boards/1/duplicate" && init?.method === "POST"
+      );
+      expect(duplicateCall).toBeDefined();
     });
   });
 });
