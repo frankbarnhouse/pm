@@ -34,6 +34,7 @@ from app.models import (
     ChangePasswordRequest,
     ChatMessagePayload,
     CreateBoardRequest,
+    ImportBoardRequest,
     UpdateBoardMetaRequest,
     UpdateProfileRequest,
 )
@@ -103,6 +104,18 @@ def get_dashboard_stats(request: Request) -> dict:
         "total_cards": total_cards,
         "total_columns": total_columns,
     }
+
+
+@router.post("/boards/import", status_code=201)
+def import_board(request: Request, payload: ImportBoardRequest) -> dict:
+    user = require_api_user(request)
+    # Validate board structure
+    try:
+        BoardPayload.model_validate(payload.board)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid board data: {exc}") from exc
+    board = create_board(user["id"], payload.title, payload.description, payload.board)
+    return {"board": board}
 
 
 @router.get("/boards")

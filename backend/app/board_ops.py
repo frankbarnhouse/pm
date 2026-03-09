@@ -118,5 +118,12 @@ def apply_board_operations(current_board: dict, operations: list[BoardOperation]
                 raise ValueError("Cannot delete the last column")
             continue
 
+        if operation.type == "move_column":
+            column = _find_column(board, operation.column_id)
+            board["columns"] = [c for c in board["columns"] if c["id"] != operation.column_id]
+            pos = max(0, min(operation.position, len(board["columns"])))
+            board["columns"].insert(pos, column)
+            continue
+
     # Reuse BoardPayload validation before persisting the update.
     return BoardPayload.model_validate(board).model_dump()

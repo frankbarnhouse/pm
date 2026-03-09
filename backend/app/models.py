@@ -113,6 +113,12 @@ class DeleteColumnOperation(BaseModel):
     column_id: str
 
 
+class MoveColumnOperation(BaseModel):
+    type: Literal["move_column"]
+    column_id: str
+    position: int
+
+
 BoardOperation = Annotated[
     CreateCardOperation
     | EditCardOperation
@@ -120,7 +126,8 @@ BoardOperation = Annotated[
     | DeleteCardOperation
     | RenameColumnOperation
     | AddColumnOperation
-    | DeleteColumnOperation,
+    | DeleteColumnOperation
+    | MoveColumnOperation,
     Field(discriminator="type"),
 ]
 
@@ -184,3 +191,9 @@ class UpdateProfileRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str = Field(min_length=4, max_length=100)
+
+
+class ImportBoardRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=100)
+    description: str = ""
+    board: dict

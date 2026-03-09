@@ -8,6 +8,7 @@ from app.models import (
     DeleteColumnOperation,
     EditCardOperation,
     MoveCardOperation,
+    MoveColumnOperation,
     RenameColumnOperation,
 )
 
@@ -245,3 +246,54 @@ def test_card_with_priority_and_due_date_preserved() -> None:
     ])
     assert result["cards"]["card-1"]["priority"] == "high"
     assert result["cards"]["card-1"]["due_date"] == "2025-12-31"
+
+
+def test_move_column_to_position_zero() -> None:
+    board = _make_board()
+    result = apply_board_operations(board, [
+        MoveColumnOperation(type="move_column", column_id="col-2", position=0),
+    ])
+    assert result["columns"][0]["id"] == "col-2"
+    assert result["columns"][1]["id"] == "col-1"
+
+
+def test_move_column_to_end() -> None:
+    board = _make_board(
+        columns=[
+            {"id": "col-1", "title": "A", "cardIds": []},
+            {"id": "col-2", "title": "B", "cardIds": []},
+            {"id": "col-3", "title": "C", "cardIds": []},
+        ],
+        cards={},
+    )
+    result = apply_board_operations(board, [
+        MoveColumnOperation(type="move_column", column_id="col-1", position=2),
+    ])
+    assert result["columns"][0]["id"] == "col-2"
+    assert result["columns"][1]["id"] == "col-3"
+    assert result["columns"][2]["id"] == "col-1"
+
+
+def test_move_column_preserves_cards() -> None:
+    board = _make_board()
+    result = apply_board_operations(board, [
+        MoveColumnOperation(type="move_column", column_id="col-1", position=1),
+    ])
+    assert result["columns"][1]["id"] == "col-1"
+    assert "card-1" in result["columns"][1]["cardIds"]
+
+
+def test_move_column_unknown_raises() -> None:
+    board = _make_board()
+    with pytest.raises(ValueError, match="Unknown column_id"):
+        apply_board_operations(board, [
+            MoveColumnOperation(type="move_column", column_id="col-missing", position=0),
+        ])
+
+
+def test_move_column_clamps_position() -> None:
+    board = _make_board()
+    result = apply_board_operations(board, [
+        MoveColumnOperation(type="move_column", column_id="col-1", position=100),
+    ])
+    assert result["columns"][-1]["id"] == "col-1"
