@@ -280,9 +280,15 @@ export const BoardDashboard = ({ onSelectBoard }: BoardDashboardProps) => {
                           {board.description}
                         </p>
                       )}
-                      <p className="mt-3 text-[10px] font-medium text-[var(--gray-text)]">
-                        Updated {formatDate(board.updated_at)}
-                      </p>
+                      <div className="mt-3 flex items-center gap-3 text-[10px] font-medium text-[var(--gray-text)]">
+                        {board.card_count !== undefined && (
+                          <span>{board.card_count} {board.card_count === 1 ? "card" : "cards"}</span>
+                        )}
+                        {board.column_count !== undefined && (
+                          <span>{board.column_count} {board.column_count === 1 ? "column" : "columns"}</span>
+                        )}
+                        <span>Updated {formatDate(board.updated_at)}</span>
+                      </div>
                     </button>
                     <div className="absolute right-3 top-3 flex gap-1 opacity-0 transition group-hover:opacity-100">
                       <button

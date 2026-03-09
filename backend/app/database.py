@@ -332,6 +332,35 @@ def list_user_boards(user_id: int) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def list_user_boards_with_counts(user_id: int) -> list[dict]:
+    with db_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, title, description, board_json, created_at, updated_at
+            FROM boards
+            WHERE user_id = ?
+            ORDER BY updated_at DESC
+            """,
+            (user_id,),
+        ).fetchall()
+
+    boards = []
+    for row in rows:
+        board_data = json.loads(row["board_json"])
+        card_count = len(board_data.get("cards", {}))
+        column_count = len(board_data.get("columns", []))
+        boards.append({
+            "id": row["id"],
+            "title": row["title"],
+            "description": row["description"],
+            "card_count": card_count,
+            "column_count": column_count,
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        })
+    return boards
+
+
 def create_board(
     user_id: int,
     title: str,

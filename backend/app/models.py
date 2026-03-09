@@ -98,12 +98,25 @@ class RenameColumnOperation(BaseModel):
     title: str
 
 
+class AddColumnOperation(BaseModel):
+    type: Literal["add_column"]
+    title: str
+    position: int | None = None
+
+
+class DeleteColumnOperation(BaseModel):
+    type: Literal["delete_column"]
+    column_id: str
+
+
 BoardOperation = Annotated[
     CreateCardOperation
     | EditCardOperation
     | MoveCardOperation
     | DeleteCardOperation
-    | RenameColumnOperation,
+    | RenameColumnOperation
+    | AddColumnOperation
+    | DeleteColumnOperation,
     Field(discriminator="type"),
 ]
 

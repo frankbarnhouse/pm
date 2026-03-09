@@ -13,6 +13,7 @@ import {
 } from "@dnd-kit/core";
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
+import { AddColumnButton } from "@/components/AddColumnButton";
 import { createId, initialData, moveCard, type BoardData } from "@/lib/kanban";
 
 type KanbanBoardProps = {
@@ -387,6 +388,27 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
     }));
   };
 
+  const handleAddColumn = (title: string) => {
+    const id = createId("col");
+    updateBoard((previous) => ({
+      ...previous,
+      columns: [...previous.columns, { id, title, cardIds: [] }],
+    }));
+  };
+
+  const handleDeleteColumn = (columnId: string) => {
+    updateBoard((previous) => ({
+      ...previous,
+      cards: Object.fromEntries(
+        Object.entries(previous.cards).filter(([cardId]) => {
+          const column = previous.columns.find((c) => c.id === columnId);
+          return !column?.cardIds.includes(cardId);
+        })
+      ),
+      columns: previous.columns.filter((c) => c.id !== columnId),
+    }));
+  };
+
   const activeCard = activeCardId ? board.cards[activeCardId] : null;
 
   return (
@@ -450,19 +472,24 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <section className="grid gap-4 lg:grid-cols-5">
+          <section className="flex gap-4 overflow-x-auto pb-2">
             {board.columns.map((column, index) => (
-              <KanbanColumn
-                key={column.id}
-                column={column}
-                columnIndex={index}
-                cards={column.cardIds.map((cardId) => board.cards[cardId]).filter(Boolean)}
-                onRename={handleRenameColumn}
-                onAddCard={handleAddCard}
-                onDeleteCard={handleDeleteCard}
-                onUpdateCard={handleUpdateCard}
-              />
+              <div key={column.id} className="w-[300px] flex-shrink-0 lg:w-auto lg:flex-1">
+                <KanbanColumn
+                  column={column}
+                  columnIndex={index}
+                  cards={column.cardIds.map((cardId) => board.cards[cardId]).filter(Boolean)}
+                  onRename={handleRenameColumn}
+                  onAddCard={handleAddCard}
+                  onDeleteCard={handleDeleteCard}
+                  onUpdateCard={handleUpdateCard}
+                  onDeleteColumn={board.columns.length > 1 ? handleDeleteColumn : undefined}
+                />
+              </div>
             ))}
+            <div className="flex w-[300px] flex-shrink-0 items-start lg:w-auto lg:flex-1">
+              <AddColumnButton onAdd={handleAddColumn} />
+            </div>
           </section>
           <DragOverlay>
             {activeCard ? (

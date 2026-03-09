@@ -36,6 +36,8 @@ CHAT_RESPONSE_SCHEMA: dict[str, Any] = {
                                                 "move_card",
                                                 "delete_card",
                                                 "rename_column",
+                                                "add_column",
+                                                "delete_column",
                                             ],
                                         },
                                         "column_id": {"type": ["string", "null"]},
@@ -44,6 +46,7 @@ CHAT_RESPONSE_SCHEMA: dict[str, Any] = {
                                         "card_id": {"type": ["string", "null"]},
                                         "to_column_id": {"type": ["string", "null"]},
                                         "before_card_id": {"type": ["string", "null"]},
+                                        "position": {"type": ["integer", "null"]},
                                     },
                                     "required": [
                                         "type",
@@ -53,6 +56,7 @@ CHAT_RESPONSE_SCHEMA: dict[str, Any] = {
                                         "card_id",
                                         "to_column_id",
                                         "before_card_id",
+                                        "position",
                                     ],
                                 },
                             }

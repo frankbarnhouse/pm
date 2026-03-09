@@ -14,6 +14,18 @@ def _next_card_id(board: dict) -> str:
     return f"card-{max_suffix + 1}"
 
 
+def _next_column_id(board: dict) -> str:
+    max_suffix = 0
+    for column in board["columns"]:
+        col_id = column["id"]
+        if not col_id.startswith("col-"):
+            continue
+        suffix = col_id.removeprefix("col-")
+        if suffix.isdigit():
+            max_suffix = max(max_suffix, int(suffix))
+    return f"col-{max_suffix + 1}"
+
+
 def _find_column(board: dict, column_id: str) -> dict:
     for column in board["columns"]:
         if column["id"] == column_id:
@@ -80,6 +92,30 @@ def apply_board_operations(current_board: dict, operations: list[BoardOperation]
         if operation.type == "rename_column":
             column = _find_column(board, operation.column_id)
             column["title"] = operation.title
+            continue
+
+        if operation.type == "add_column":
+            new_col_id = _next_column_id(board)
+            new_column = {
+                "id": new_col_id,
+                "title": operation.title,
+                "cardIds": [],
+            }
+            if operation.position is not None and 0 <= operation.position <= len(board["columns"]):
+                board["columns"].insert(operation.position, new_column)
+            else:
+                board["columns"].append(new_column)
+            continue
+
+        if operation.type == "delete_column":
+            column = _find_column(board, operation.column_id)
+            # Delete all cards in the column
+            for card_id in column["cardIds"]:
+                if card_id in board["cards"]:
+                    del board["cards"][card_id]
+            board["columns"] = [c for c in board["columns"] if c["id"] != operation.column_id]
+            if not board["columns"]:
+                raise ValueError("Cannot delete the last column")
             continue
 
     # Reuse BoardPayload validation before persisting the update.

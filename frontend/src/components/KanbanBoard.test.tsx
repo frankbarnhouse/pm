@@ -6,7 +6,7 @@ import { initialData } from "@/lib/kanban";
 
 const BOARD_ID = 1;
 
-const getFirstColumn = () => screen.getAllByTestId(/column-/i)[0];
+const getFirstColumn = () => screen.getAllByTestId(/^column-/i)[0];
 
 const waitForBoardLoad = async () => {
   await waitFor(() => {
@@ -97,7 +97,7 @@ afterEach(() => {
 describe("KanbanBoard", () => {
   it("renders five columns", async () => {
     await setupBoard();
-    expect(screen.getAllByTestId(/column-/i)).toHaveLength(5);
+    expect(screen.getAllByTestId(/^column-/i)).toHaveLength(5);
   });
 
   it("shows the board title", async () => {

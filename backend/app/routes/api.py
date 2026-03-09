@@ -16,7 +16,7 @@ from app.database import (
     create_board,
     delete_board,
     get_board,
-    list_user_boards,
+    list_user_boards_with_counts,
     read_board_data,
     read_user_board,
     update_board_meta,
@@ -46,13 +46,23 @@ def health() -> dict[str, str]:
     return {"status": "ok", "service": "backend"}
 
 
+@router.get("/me")
+def get_current_user(request: Request) -> dict:
+    user = require_api_user(request)
+    return {
+        "id": user["id"],
+        "username": user["username"],
+        "display_name": user["display_name"],
+    }
+
+
 # --- Multi-board endpoints ---
 
 
 @router.get("/boards")
 def get_boards(request: Request) -> dict:
     user = require_api_user(request)
-    boards = list_user_boards(user["id"])
+    boards = list_user_boards_with_counts(user["id"])
     return {"boards": boards}
 
 
