@@ -1,40 +1,16 @@
 import json
 import sqlite3
-import sys
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
+from conftest import make_test_client, login_test_client
 from app import main
-
-
-def _make_client(tmp_path: Path) -> TestClient:
-    dist_dir = tmp_path / "frontend_dist"
-    dist_dir.mkdir(parents=True)
-    (dist_dir / "index.html").write_text("<html><body>Kanban Studio</body></html>")
-
-    db_path = tmp_path / "data" / "app.db"
-    main.FRONTEND_DIST_DIR = dist_dir
-    main.DB_PATH = db_path
-    main._initialize_database()
-
-    return TestClient(main.app)
-
-
-def _login(client: TestClient) -> None:
-    response = client.post(
-        "/auth/login",
-        data={"username": "user", "password": "password"},
-        follow_redirects=False,
-    )
-    assert response.status_code == 303
 
 
 def test_db_is_created_and_seeded_on_startup(tmp_path: Path) -> None:
     db_path = tmp_path / "data" / "app.db"
-    client = _make_client(tmp_path)
+    client = make_test_client(tmp_path)
 
     client.get("/api/health")
 
@@ -54,8 +30,43 @@ def test_db_is_created_and_seeded_on_startup(tmp_path: Path) -> None:
         assert "columns" in json.loads(board_row[0])
 
 
+def test_legacy_users_schema_is_migrated(tmp_path: Path) -> None:
+    db_path = tmp_path / "data" / "app.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with sqlite3.connect(db_path) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE users (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              username TEXT NOT NULL UNIQUE,
+              password_plaintext TEXT NOT NULL,
+              created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+              updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+            );
+
+            INSERT INTO users (username, password_plaintext)
+            VALUES ('user', 'password');
+            """
+        )
+
+    main.DB_PATH = db_path
+    main._initialize_database()
+
+    with sqlite3.connect(db_path) as connection:
+        user_row = connection.execute(
+            "SELECT password_hash, password_salt FROM users WHERE username = ?",
+            ("user",),
+        ).fetchone()
+        assert user_row is not None
+        assert user_row[0]
+        assert user_row[1]
+
+    assert main._verify_credentials("user", "password")
+
+
 def test_board_api_requires_authentication(tmp_path: Path) -> None:
-    client = _make_client(tmp_path)
+    client = make_test_client(tmp_path)
 
     response = client.get("/api/board")
 
@@ -63,8 +74,8 @@ def test_board_api_requires_authentication(tmp_path: Path) -> None:
 
 
 def test_get_board_returns_persisted_board(tmp_path: Path) -> None:
-    client = _make_client(tmp_path)
-    _login(client)
+    client = make_test_client(tmp_path)
+    login_test_client(client)
 
     response = client.get("/api/board")
 
@@ -75,8 +86,8 @@ def test_get_board_returns_persisted_board(tmp_path: Path) -> None:
 
 
 def test_put_board_overwrites_persisted_board(tmp_path: Path) -> None:
-    client = _make_client(tmp_path)
-    _login(client)
+    client = make_test_client(tmp_path)
+    login_test_client(client)
 
     update_payload = {
         "columns": [
@@ -104,8 +115,8 @@ def test_put_board_overwrites_persisted_board(tmp_path: Path) -> None:
 
 
 def test_put_board_rejects_invalid_board_shape(tmp_path: Path) -> None:
-    client = _make_client(tmp_path)
-    _login(client)
+    client = make_test_client(tmp_path)
+    login_test_client(client)
 
     invalid_payload = {
         "columns": [

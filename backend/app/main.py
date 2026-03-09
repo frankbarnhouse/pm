@@ -1,4 +1,7 @@
+import hashlib
 import json
+import logging
+import secrets
 import sqlite3
 from copy import deepcopy
 from contextlib import asynccontextmanager
@@ -7,6 +10,7 @@ from typing import Annotated, Literal
 from urllib.parse import parse_qs
 from uuid import uuid4
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -21,6 +25,14 @@ from app.ai_client import (
     run_structured_chat,
 )
 
+# Load environment variables from .env file (for local development)
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
+
+logger = logging.getLogger(__name__)
+
+MAX_CHAT_HISTORY_MESSAGES = 40
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     _initialize_database()
@@ -33,10 +45,10 @@ FRONTEND_DIST_DIR = Path(__file__).resolve().parent.parent / "frontend_dist"
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "app.db"
 
 SESSION_COOKIE = "pm_session"
-SESSION_ID_COOKIE = "pm_session_id"
 MVP_USERNAME = "user"
 MVP_PASSWORD = "password"
 
+SESSION_STORE: dict[str, str] = {}
 SESSION_CHAT_HISTORY: dict[str, list[dict[str, str]]] = {}
 
 INITIAL_BOARD = {
@@ -204,6 +216,12 @@ class AIChatResultPayload(BaseModel):
     board_update: BoardUpdatePayload | None = None
 
 
+def _hash_password(password: str, salt: str) -> str:
+    return hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), salt.encode(), 100000
+    ).hex()
+
+
 def _db_connection() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(DB_PATH)
@@ -212,18 +230,60 @@ def _db_connection() -> sqlite3.Connection:
     return connection
 
 
+def _table_columns(connection: sqlite3.Connection, table_name: str) -> set[str]:
+    rows = connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return {row["name"] for row in rows}
+
+
+def _migrate_users_table(connection: sqlite3.Connection) -> set[str]:
+    user_columns = _table_columns(connection, "users")
+
+    if "password_hash" not in user_columns:
+        connection.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
+        user_columns.add("password_hash")
+
+    if "password_salt" not in user_columns:
+        connection.execute("ALTER TABLE users ADD COLUMN password_salt TEXT")
+        user_columns.add("password_salt")
+
+    if "password_plaintext" in user_columns:
+        legacy_users = connection.execute(
+            """
+            SELECT id, password_plaintext
+            FROM users
+            WHERE password_hash IS NULL OR password_salt IS NULL
+            """
+        ).fetchall()
+
+        for row in legacy_users:
+            salt = secrets.token_hex(16)
+            hashed = _hash_password(row["password_plaintext"], salt)
+            connection.execute(
+                """
+                UPDATE users
+                SET password_hash = ?, password_salt = ?,
+                    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                WHERE id = ?
+                """,
+                (hashed, salt, row["id"]),
+            )
+
+    return user_columns
+
+
 def _initialize_database() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     with _db_connection() as connection:
         connection.executescript(
             """
-            PRAGMA user_version = 1;
+            PRAGMA user_version = 2;
 
             CREATE TABLE IF NOT EXISTS users (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               username TEXT NOT NULL UNIQUE,
-              password_plaintext TEXT NOT NULL,
+              password_hash TEXT NOT NULL,
+              password_salt TEXT NOT NULL,
               created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
               updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
             );
@@ -243,14 +303,29 @@ def _initialize_database() -> None:
             """
         )
 
-        connection.execute(
-            """
-            INSERT INTO users (username, password_plaintext)
-            VALUES (?, ?)
-            ON CONFLICT(username) DO NOTHING
-            """,
-            (MVP_USERNAME, MVP_PASSWORD),
-        )
+        user_columns = _migrate_users_table(connection)
+
+        salt = secrets.token_hex(16)
+        hashed = _hash_password(MVP_PASSWORD, salt)
+
+        if "password_plaintext" in user_columns:
+            connection.execute(
+                """
+                INSERT INTO users (username, password_plaintext, password_hash, password_salt)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(username) DO NOTHING
+                """,
+                (MVP_USERNAME, MVP_PASSWORD, hashed, salt),
+            )
+        else:
+            connection.execute(
+                """
+                INSERT INTO users (username, password_hash, password_salt)
+                VALUES (?, ?, ?)
+                ON CONFLICT(username) DO NOTHING
+                """,
+                (MVP_USERNAME, hashed, salt),
+            )
 
         user_id_row = connection.execute(
             "SELECT id FROM users WHERE username = ?",
@@ -276,14 +351,17 @@ def _get_user_by_username(username: str | None) -> sqlite3.Row | None:
 
     with _db_connection() as connection:
         return connection.execute(
-            "SELECT id, username, password_plaintext FROM users WHERE username = ?",
+            "SELECT id, username, password_hash, password_salt FROM users WHERE username = ?",
             (username,),
         ).fetchone()
 
 
 def _verify_credentials(username: str, password: str) -> bool:
     user = _get_user_by_username(username)
-    return user is not None and user["password_plaintext"] == password
+    if user is None:
+        return False
+    expected_hash = _hash_password(password, user["password_salt"])
+    return user["password_hash"] == expected_hash
 
 
 def _read_user_board(user_id: int) -> dict:
@@ -309,8 +387,8 @@ def _write_user_board(user_id: int, board: dict) -> None:
             (json.dumps(board), user_id),
         )
 
-    if result.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Board not found")
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Board not found")
 
 
 def _next_card_id(board: dict) -> str:
@@ -396,20 +474,19 @@ def _apply_board_operations(current_board: dict, operations: list[BoardOperation
     return BoardPayload.model_validate(board).model_dump()
 
 
-def _get_session_id(request: Request) -> str | None:
-    return request.cookies.get(SESSION_ID_COOKIE)
-
-
 def _get_session_history(request: Request) -> list[dict[str, str]]:
-    session_id = _get_session_id(request)
-    if not session_id:
+    session_token = request.cookies.get(SESSION_COOKIE)
+    if not session_token or session_token not in SESSION_STORE:
         return []
-    return SESSION_CHAT_HISTORY.setdefault(session_id, [])
+    return SESSION_CHAT_HISTORY.setdefault(session_token, [])
 
 
 def _frontend_file(path: str) -> Path:
     normalized = path.lstrip("/")
     candidate = FRONTEND_DIST_DIR / normalized
+
+    if not candidate.resolve().is_relative_to(FRONTEND_DIST_DIR.resolve()):
+        raise HTTPException(status_code=404, detail="Not found")
 
     if candidate.is_dir():
         return candidate / "index.html"
@@ -419,8 +496,11 @@ def _frontend_file(path: str) -> Path:
 
 
 def _current_user(request: Request) -> sqlite3.Row | None:
-    session_username = request.cookies.get(SESSION_COOKIE)
-    return _get_user_by_username(session_username)
+    session_token = request.cookies.get(SESSION_COOKIE)
+    if not session_token:
+        return None
+    username = SESSION_STORE.get(session_token)
+    return _get_user_by_username(username)
 
 
 def _require_api_user(request: Request) -> sqlite3.Row:
@@ -573,7 +653,7 @@ def ai_connectivity(request: Request) -> dict[str, str | bool]:
 
 
 @app.post("/api/chat")
-def chat(request: Request, payload: ChatMessagePayload) -> dict[str, str | bool]:
+def chat(request: Request, payload: ChatMessagePayload) -> dict[str, str | bool | None]:
     user = _require_api_user(request)
     board = _read_user_board(user["id"])
     history = _get_session_history(request)
@@ -589,24 +669,29 @@ def chat(request: Request, payload: ChatMessagePayload) -> dict[str, str | bool]
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except OpenAIChatError as exc:
         raise HTTPException(status_code=502, detail=f"OpenAI chat failed: {exc}") from exc
-    except Exception as exc:
+    except (json.JSONDecodeError, ValueError) as exc:
         raise HTTPException(status_code=502, detail=f"Invalid AI structured response: {exc}") from exc
 
     board_updated = False
+    update_error = None
     if result.board_update is not None:
         try:
             updated_board = _apply_board_operations(board, result.board_update.operations)
             _write_user_board(user["id"], updated_board)
             board_updated = True
-        except ValueError:
+        except ValueError as exc:
             board_updated = False
+            update_error = str(exc)
+            logger.error("Board operation failed: %s", update_error)
 
     history.append({"role": "user", "content": payload.prompt})
     history.append({"role": "assistant", "content": result.assistant_message})
+    history[:] = history[-MAX_CHAT_HISTORY_MESSAGES:]
 
     return {
         "assistant_message": result.assistant_message,
         "board_updated": board_updated,
+        "update_error": update_error,
     }
 
 
@@ -627,32 +712,27 @@ async def login(request: Request) -> RedirectResponse:
         return RedirectResponse(url="/login?error=1", status_code=status.HTTP_303_SEE_OTHER)
 
     response = RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
-    session_id = uuid4().hex
-    SESSION_CHAT_HISTORY.setdefault(session_id, [])
+    session_token = uuid4().hex
+    SESSION_STORE[session_token] = username
+    SESSION_CHAT_HISTORY.setdefault(session_token, [])
     response.set_cookie(
         key=SESSION_COOKIE,
-        value=username,
+        value=session_token,
         httponly=True,
-        samesite="lax",
-    )
-    response.set_cookie(
-        key=SESSION_ID_COOKIE,
-        value=session_id,
-        httponly=True,
-        samesite="lax",
+        samesite="strict",
     )
     return response
 
 
 @app.post("/auth/logout", include_in_schema=False)
 def logout(request: Request) -> RedirectResponse:
-    session_id = _get_session_id(request)
-    if session_id:
-        SESSION_CHAT_HISTORY.pop(session_id, None)
+    session_token = request.cookies.get(SESSION_COOKIE)
+    if session_token:
+        SESSION_STORE.pop(session_token, None)
+        SESSION_CHAT_HISTORY.pop(session_token, None)
 
     response = RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     response.delete_cookie(SESSION_COOKIE)
-    response.delete_cookie(SESSION_ID_COOKIE)
     return response
 
 

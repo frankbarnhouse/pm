@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { FormEvent, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -37,6 +37,8 @@ export const KanbanBoard = () => {
   const isResizingChatRef = useRef(false);
   const resizeStartYRef = useRef(0);
   const resizeStartHeightRef = useRef(520);
+  const persistTimerRef = useRef<number | null>(null);
+  const skipNextPersistRef = useRef(true);
 
   const showTransientSyncStatus = (message: string) => {
     setSyncStatus(message);
@@ -92,8 +94,41 @@ export const KanbanBoard = () => {
       if (chatStatusTimerRef.current) {
         window.clearTimeout(chatStatusTimerRef.current);
       }
+      if (persistTimerRef.current) {
+        window.clearTimeout(persistTimerRef.current);
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (skipNextPersistRef.current) {
+      skipNextPersistRef.current = false;
+      return;
+    }
+    if (persistTimerRef.current) {
+      window.clearTimeout(persistTimerRef.current);
+    }
+    persistTimerRef.current = window.setTimeout(() => {
+      persistTimerRef.current = null;
+      void persistBoard(board);
+    }, 500);
+    return () => {
+      if (persistTimerRef.current) {
+        window.clearTimeout(persistTimerRef.current);
+      }
+    };
+  }, [board]);
+
+  useEffect(() => {
+    if (!isChatOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsChatOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isChatOpen]);
 
   useEffect(() => {
     if (!chatScrollRef.current) {
@@ -234,11 +269,16 @@ export const KanbanBoard = () => {
       ]);
 
       if (payload.board_updated) {
-        const refreshed = await loadBoardForRefresh();
-        if (refreshed) {
-          setBoard(refreshed);
+        try {
+          const refreshed = await loadBoardForRefresh();
+          if (refreshed) {
+            skipNextPersistRef.current = true;
+            setBoard(refreshed);
+          }
+          showTransientChatStatus("Applied update and refreshed board.");
+        } catch {
+          showTransientChatStatus("Update applied but refresh failed. Reload the page.");
         }
-        showTransientChatStatus("Applied update and refreshed board.");
       } else {
         showTransientChatStatus("Reply received.");
       }
@@ -257,11 +297,7 @@ export const KanbanBoard = () => {
   };
 
   const updateBoard = (updater: (previous: BoardData) => BoardData) => {
-    setBoard((previous) => {
-      const next = updater(previous);
-      void persistBoard(next);
-      return next;
-    });
+    setBoard(updater);
   };
 
   const sensors = useSensors(
@@ -269,8 +305,6 @@ export const KanbanBoard = () => {
       activationConstraint: { distance: 6 },
     })
   );
-
-  const cardsById = useMemo(() => board.cards, [board.cards]);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveCardId(event.active.id as string);
@@ -334,7 +368,7 @@ export const KanbanBoard = () => {
     });
   };
 
-  const activeCard = activeCardId ? cardsById[activeCardId] : null;
+  const activeCard = activeCardId ? board.cards[activeCardId] : null;
 
   return (
     <div className="relative overflow-hidden">
@@ -407,7 +441,7 @@ export const KanbanBoard = () => {
               <KanbanColumn
                 key={column.id}
                 column={column}
-                cards={column.cardIds.map((cardId) => board.cards[cardId])}
+                cards={column.cardIds.map((cardId) => board.cards[cardId]).filter(Boolean)}
                 onRename={handleRenameColumn}
                 onAddCard={handleAddCard}
                 onDeleteCard={handleDeleteCard}

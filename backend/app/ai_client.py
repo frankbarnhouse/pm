@@ -95,7 +95,7 @@ def run_connectivity_check(
         raise MissingApiKeyError("OPENAI_API_KEY is not configured")
 
     try:
-        client = client_factory(api_key=effective_api_key)
+        client = client_factory(api_key=effective_api_key, timeout=30)
         response = client.responses.create(
             model=get_openai_model(),
             input=CONNECTIVITY_PROMPT,
@@ -137,7 +137,7 @@ def run_structured_chat(
     }
 
     try:
-        client = client_factory(api_key=effective_api_key)
+        client = client_factory(api_key=effective_api_key, timeout=30)
         response = client.responses.create(
             model=get_openai_model(),
             input=[

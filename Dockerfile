@@ -12,10 +12,16 @@ FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 WORKDIR /app/backend
 
+COPY backend/pyproject.toml backend/uv.lock ./
+RUN uv sync --no-dev
+
 COPY backend/ ./
 COPY --from=frontend-builder /app/frontend/out ./frontend_dist
 
-RUN uv sync --no-dev
+RUN useradd --create-home --shell /bin/bash appuser && \
+    mkdir -p /app/backend/data && \
+    chown -R appuser:appuser /app/backend
+USER appuser
 
 EXPOSE 8000
 

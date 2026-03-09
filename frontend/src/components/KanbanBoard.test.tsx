@@ -96,7 +96,7 @@ describe("KanbanBoard", () => {
   it("renames a column", async () => {
     const fetchMock = await setupBoard();
     const column = getFirstColumn();
-    const input = within(column).getByLabelText("Column title");
+    const input = within(column).getByLabelText("Title for Backlog");
     fireEvent.change(input, { target: { value: "New Name" } });
     expect(input).toHaveValue("New Name");
     await waitFor(() => {

@@ -1,39 +1,14 @@
 import copy
-import sys
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
+from conftest import make_test_client, login_test_client
 from app import main
 
 
-def _make_client(tmp_path: Path) -> TestClient:
-    dist_dir = tmp_path / "frontend_dist"
-    dist_dir.mkdir(parents=True)
-    (dist_dir / "index.html").write_text("<html><body>Kanban Studio</body></html>")
-
-    db_path = tmp_path / "data" / "app.db"
-    main.FRONTEND_DIST_DIR = dist_dir
-    main.DB_PATH = db_path
-    main.SESSION_CHAT_HISTORY.clear()
-    main._initialize_database()
-
-    return TestClient(main.app)
-
-
-def _login(client: TestClient) -> None:
-    response = client.post(
-        "/auth/login",
-        data={"username": "user", "password": "password"},
-        follow_redirects=False,
-    )
-    assert response.status_code == 303
-
-
 def test_chat_requires_authentication(tmp_path: Path) -> None:
-    client = _make_client(tmp_path)
+    client = make_test_client(tmp_path)
 
     response = client.post("/api/chat", json={"prompt": "hello"})
 
@@ -41,8 +16,8 @@ def test_chat_requires_authentication(tmp_path: Path) -> None:
 
 
 def test_chat_no_update_returns_message(tmp_path: Path, monkeypatch) -> None:
-    client = _make_client(tmp_path)
-    _login(client)
+    client = make_test_client(tmp_path)
+    login_test_client(client)
 
     monkeypatch.setattr(
         main,
@@ -59,8 +34,8 @@ def test_chat_no_update_returns_message(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_chat_update_is_applied_atomically(tmp_path: Path, monkeypatch) -> None:
-    client = _make_client(tmp_path)
-    _login(client)
+    client = make_test_client(tmp_path)
+    login_test_client(client)
 
     monkeypatch.setattr(
         main,
@@ -92,8 +67,8 @@ def test_chat_update_is_applied_atomically(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_chat_invalid_update_is_rejected_without_partial_write(tmp_path: Path, monkeypatch) -> None:
-    client = _make_client(tmp_path)
-    _login(client)
+    client = make_test_client(tmp_path)
+    login_test_client(client)
 
     before_board = client.get("/api/board").json()["board"]
 
@@ -126,8 +101,8 @@ def test_chat_invalid_update_is_rejected_without_partial_write(tmp_path: Path, m
 
 
 def test_chat_uses_session_history(tmp_path: Path, monkeypatch) -> None:
-    client = _make_client(tmp_path)
-    _login(client)
+    client = make_test_client(tmp_path)
+    login_test_client(client)
 
     observed_history: list[list[dict[str, str]]] = []
 

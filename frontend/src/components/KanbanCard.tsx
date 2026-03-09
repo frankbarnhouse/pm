@@ -11,6 +11,7 @@ type KanbanCardProps = {
 export const KanbanCard = ({ card, onDelete }: KanbanCardProps) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: card.id });
+  const { ["aria-describedby"]: _ariaDescribedBy, ...sortableAttributes } = attributes;
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -26,7 +27,7 @@ export const KanbanCard = ({ card, onDelete }: KanbanCardProps) => {
         "transition-all duration-150",
         isDragging && "opacity-60 shadow-[0_18px_32px_rgba(3,33,71,0.16)]"
       )}
-      {...attributes}
+      {...sortableAttributes}
       {...listeners}
       data-testid={`card-${card.id}`}
     >

@@ -109,6 +109,6 @@ test("applies AI chat board update and refreshes", async ({ page }) => {
 
   await expect(page.getByText("Renamed Review to QA.")).toBeVisible();
   await expect(
-    page.getByTestId("column-col-review").locator('input[aria-label="Column title"]')
+    page.getByTestId("column-col-review").locator('input[aria-label="Title for QA"]')
   ).toHaveValue("QA");
 });
