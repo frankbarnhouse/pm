@@ -49,6 +49,15 @@ export type BoardMeta = {
   updated_at: string;
 };
 
+export type ActivityEntry = {
+  id: number;
+  action: string;
+  detail: string;
+  created_at: string;
+  username: string;
+  display_name: string;
+};
+
 export const initialData: BoardData = {
   columns: [
     { id: "col-backlog", title: "Backlog", cardIds: ["card-1", "card-2"] },

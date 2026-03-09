@@ -209,8 +209,20 @@ def initialize_database() -> None:
               FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS activity_log (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              board_id INTEGER NOT NULL,
+              user_id INTEGER NOT NULL,
+              action TEXT NOT NULL,
+              detail TEXT NOT NULL DEFAULT '',
+              created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+              FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE,
+              FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
             CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
             CREATE INDEX IF NOT EXISTS idx_boards_user_id ON boards(user_id);
+            CREATE INDEX IF NOT EXISTS idx_activity_board_id ON activity_log(board_id);
             """
         )
 
@@ -566,3 +578,38 @@ def write_user_board(user_id: int, board: dict) -> None:
 
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Board not found")
+
+
+# --- Activity log ---
+
+
+def log_activity(board_id: int, user_id: int, action: str, detail: str = "") -> None:
+    with db_connection() as connection:
+        connection.execute(
+            "INSERT INTO activity_log (board_id, user_id, action, detail) VALUES (?, ?, ?, ?)",
+            (board_id, user_id, action, detail),
+        )
+
+
+def get_board_activity(board_id: int, user_id: int, limit: int = 50) -> list[dict]:
+    with db_connection() as connection:
+        # Verify board ownership
+        board = connection.execute(
+            "SELECT id FROM boards WHERE id = ? AND user_id = ?",
+            (board_id, user_id),
+        ).fetchone()
+        if board is None:
+            raise HTTPException(status_code=404, detail="Board not found")
+
+        rows = connection.execute(
+            """
+            SELECT a.id, a.action, a.detail, a.created_at, u.username, u.display_name
+            FROM activity_log a
+            JOIN users u ON u.id = a.user_id
+            WHERE a.board_id = ?
+            ORDER BY a.created_at DESC
+            LIMIT ?
+            """,
+            (board_id, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]

@@ -19,8 +19,10 @@ from app.database import (
     delete_board,
     duplicate_board,
     get_board,
+    get_board_activity,
     hash_password,
     list_user_boards_with_counts,
+    log_activity,
     read_board_data,
     read_user_board,
     update_board_meta,
@@ -132,6 +134,7 @@ def get_boards(request: Request, include_archived: bool = False) -> dict:
 def create_new_board(request: Request, payload: CreateBoardRequest) -> dict:
     user = require_api_user(request)
     board = create_board(user["id"], payload.title, payload.description)
+    log_activity(board["id"], user["id"], "board_created", f"Created board '{payload.title}'")
     return {"board": board}
 
 
@@ -153,6 +156,7 @@ def put_board_by_id(request: Request, board_id: int, payload: BoardPayload) -> d
     user = require_api_user(request)
     board = payload.model_dump()
     write_board_data(board_id, user["id"], board)
+    log_activity(board_id, user["id"], "board_updated", "Board data saved")
     return {"board": board}
 
 
@@ -232,6 +236,13 @@ def get_board_stats(request: Request, board_id: int) -> dict:
     }
 
 
+@router.get("/boards/{board_id}/activity")
+def get_activity(request: Request, board_id: int) -> dict:
+    user = require_api_user(request)
+    entries = get_board_activity(board_id, user["id"])
+    return {"activity": entries}
+
+
 @router.post("/boards/{board_id}/cards/{card_id}/comments", status_code=201)
 def add_comment(request: Request, board_id: int, card_id: str, payload: AddCommentRequest) -> dict:
     user = require_api_user(request)
@@ -241,6 +252,7 @@ def add_comment(request: Request, board_id: int, card_id: str, payload: AddComme
         AddCommentOperation(type="add_comment", card_id=card_id, text=payload.text, author=display_name),
     ])
     write_board_data(board_id, user["id"], updated)
+    log_activity(board_id, user["id"], "comment_added", f"Comment on {card_id}")
     card = updated["cards"][card_id]
     return {"comment": card["comments"][-1]}
 
@@ -286,6 +298,8 @@ def board_chat(request: Request, board_id: int, payload: ChatMessagePayload) -> 
             updated_board = apply_board_operations(board, result.board_update.operations)
             write_board_data(board_id, user["id"], updated_board)
             board_updated = True
+            op_types = ", ".join(op.type for op in result.board_update.operations)
+            log_activity(board_id, user["id"], "ai_update", f"AI applied: {op_types}")
         except ValueError as exc:
             board_updated = False
             update_error = str(exc)

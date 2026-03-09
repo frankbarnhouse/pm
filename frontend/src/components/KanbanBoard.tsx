@@ -14,7 +14,7 @@ import {
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { AddColumnButton } from "@/components/AddColumnButton";
-import { createId, initialData, moveCard, type BoardData, type CardLabel } from "@/lib/kanban";
+import { createId, initialData, moveCard, type ActivityEntry, type BoardData, type CardLabel } from "@/lib/kanban";
 
 type KanbanBoardProps = {
   boardId: number;
@@ -35,6 +35,8 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
   const [isChatSending, setIsChatSending] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatDesktopHeight, setChatDesktopHeight] = useState(520);
+  const [isActivityOpen, setIsActivityOpen] = useState(false);
+  const [activityEntries, setActivityEntries] = useState<ActivityEntry[]>([]);
   const [chatMessages, setChatMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([
     {
       role: "assistant",
@@ -433,6 +435,25 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
     }
   };
 
+  const loadActivity = async () => {
+    try {
+      const response = await fetch(`/api/boards/${boardId}/activity`);
+      if (response.ok) {
+        const data = await response.json();
+        setActivityEntries(data.activity || []);
+      }
+    } catch {
+      // Silently fail
+    }
+  };
+
+  const toggleActivity = () => {
+    if (!isActivityOpen) {
+      void loadActivity();
+    }
+    setIsActivityOpen((prev) => !prev);
+  };
+
   const handleDeleteColumn = (columnId: string) => {
     updateBoard((previous) => ({
       ...previous,
@@ -501,6 +522,21 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
                 Loading...
               </span>
             )}
+            <button
+              type="button"
+              onClick={toggleActivity}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                isActivityOpen
+                  ? "border-[var(--primary-blue)] text-[var(--primary-blue)]"
+                  : "border-[var(--stroke)] text-[var(--gray-text)] hover:border-[var(--primary-blue)] hover:text-[var(--primary-blue)]"
+              }`}
+              data-testid="activity-toggle"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+              </svg>
+              Activity
+            </button>
             <form action="/auth/logout" method="post">
               <button
                 type="submit"
@@ -516,6 +552,43 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
             </form>
           </div>
         </header>
+
+        {isActivityOpen && (
+          <div className="rounded-2xl border border-[var(--stroke)] bg-white/80 px-5 py-4 shadow-[0_2px_8px_rgba(3,33,71,0.04)] backdrop-blur" data-testid="activity-panel">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--gray-text)]">Recent Activity</h3>
+            {activityEntries.length === 0 ? (
+              <p className="text-xs text-[var(--gray-text)]">No activity yet.</p>
+            ) : (
+              <div className="max-h-[200px] space-y-2 overflow-y-auto">
+                {activityEntries.slice(0, 20).map((entry) => {
+                  const actionLabels: Record<string, string> = {
+                    board_created: "Created",
+                    board_updated: "Updated",
+                    comment_added: "Comment",
+                    ai_update: "AI Update",
+                  };
+                  return (
+                    <div key={entry.id} className="flex items-start gap-2 text-xs">
+                      <span className="mt-0.5 inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[var(--primary-blue)]" />
+                      <div className="min-w-0 flex-1">
+                        <span className="font-semibold text-[var(--navy-dark)]">
+                          {actionLabels[entry.action] || entry.action}
+                        </span>
+                        {entry.detail && (
+                          <span className="ml-1 text-[var(--gray-text)]">{entry.detail}</span>
+                        )}
+                        <div className="mt-0.5 text-[10px] text-[var(--gray-text)]">
+                          {entry.display_name || entry.username} &middot;{" "}
+                          {new Date(entry.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--stroke)] bg-white/80 px-4 py-2.5 shadow-[0_2px_8px_rgba(3,33,71,0.04)] backdrop-blur">
           <div className="relative flex-1 min-w-[180px]">
