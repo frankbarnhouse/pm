@@ -53,15 +53,24 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
   const persistTimerRef = useRef<number | null>(null);
   const skipNextPersistRef = useRef(true);
 
-  const showTransientSyncStatus = (message: string) => {
-    setSyncStatus(message);
-    if (syncStatusTimerRef.current) {
-      window.clearTimeout(syncStatusTimerRef.current);
+  const showTransientStatus = (
+    setter: typeof setSyncStatus,
+    timerRef: typeof syncStatusTimerRef,
+    message: string,
+    durationMs: number,
+  ) => {
+    setter(message);
+    if (timerRef.current) {
+      window.clearTimeout(timerRef.current);
     }
-    syncStatusTimerRef.current = window.setTimeout(() => {
-      setSyncStatus(null);
-      syncStatusTimerRef.current = null;
-    }, 2200);
+    timerRef.current = window.setTimeout(() => {
+      setter(null);
+      timerRef.current = null;
+    }, durationMs);
+  };
+
+  const showTransientSyncStatus = (message: string) => {
+    showTransientStatus(setSyncStatus, syncStatusTimerRef, message, 2200);
   };
 
   useEffect(() => {
@@ -231,14 +240,7 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
   };
 
   const showTransientChatStatus = (message: string) => {
-    setChatStatus(message);
-    if (chatStatusTimerRef.current) {
-      window.clearTimeout(chatStatusTimerRef.current);
-    }
-    chatStatusTimerRef.current = window.setTimeout(() => {
-      setChatStatus(null);
-      chatStatusTimerRef.current = null;
-    }, 2600);
+    showTransientStatus(setChatStatus, chatStatusTimerRef, message, 2600);
   };
 
   const handleChatSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -312,10 +314,6 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
     }
   };
 
-  const updateBoard = (updater: (previous: BoardData) => BoardData) => {
-    setBoard(updater);
-  };
-
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 6 },
@@ -334,14 +332,14 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
       return;
     }
 
-    updateBoard((previous) => ({
+    setBoard((previous) => ({
       ...previous,
       columns: moveCard(previous.columns, active.id as string, over.id as string),
     }));
   };
 
   const handleRenameColumn = (columnId: string, title: string) => {
-    updateBoard((previous) => ({
+    setBoard((previous) => ({
       ...previous,
       columns: previous.columns.map((column) =>
         column.id === columnId ? { ...column, title } : column
@@ -351,7 +349,7 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
 
   const handleAddCard = (columnId: string, title: string, details: string) => {
     const id = createId("card");
-    updateBoard((previous) => ({
+    setBoard((previous) => ({
       ...previous,
       cards: {
         ...previous.cards,
@@ -366,26 +364,21 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
   };
 
   const handleDeleteCard = (columnId: string, cardId: string) => {
-    updateBoard((previous) => {
-      return {
-        ...previous,
-        cards: Object.fromEntries(
-          Object.entries(previous.cards).filter(([id]) => id !== cardId)
-        ),
-        columns: previous.columns.map((column) =>
-          column.id === columnId
-            ? {
-                ...column,
-                cardIds: column.cardIds.filter((id) => id !== cardId),
-              }
-            : column
-        ),
-      };
-    });
+    setBoard((previous) => ({
+      ...previous,
+      cards: Object.fromEntries(
+        Object.entries(previous.cards).filter(([id]) => id !== cardId)
+      ),
+      columns: previous.columns.map((column) =>
+        column.id === columnId
+          ? { ...column, cardIds: column.cardIds.filter((id) => id !== cardId) }
+          : column
+      ),
+    }));
   };
 
   const handleUpdateCard = (cardId: string, updates: { title?: string; details?: string; priority?: "low" | "medium" | "high" | null; due_date?: string | null; labels?: CardLabel[] }) => {
-    updateBoard((previous) => ({
+    setBoard((previous) => ({
       ...previous,
       cards: {
         ...previous.cards,
@@ -396,95 +389,51 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
 
   const handleAddColumn = (title: string) => {
     const id = createId("col");
-    updateBoard((previous) => ({
+    setBoard((previous) => ({
       ...previous,
       columns: [...previous.columns, { id, title, cardIds: [] }],
     }));
   };
 
-  const handleAddComment = async (cardId: string, text: string) => {
+  const fetchAndRefresh = async (
+    url: string,
+    options: RequestInit,
+    errorMessage: string,
+  ) => {
     try {
-      const response = await fetch(`/api/boards/${boardId}/cards/${cardId}/comments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (!response.ok) throw new Error("Failed to add comment");
+      const response = await fetch(url, options);
+      if (!response.ok) throw new Error(errorMessage);
       const refreshed = await loadBoardForRefresh();
       if (refreshed) {
         skipNextPersistRef.current = true;
         setBoard(refreshed);
       }
     } catch {
-      showTransientSyncStatus("Failed to add comment.");
+      showTransientSyncStatus(errorMessage);
     }
   };
 
-  const handleDeleteComment = async (cardId: string, commentId: string) => {
-    try {
-      const response = await fetch(`/api/boards/${boardId}/cards/${cardId}/comments/${commentId}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) throw new Error("Failed to delete comment");
-      const refreshed = await loadBoardForRefresh();
-      if (refreshed) {
-        skipNextPersistRef.current = true;
-        setBoard(refreshed);
-      }
-    } catch {
-      showTransientSyncStatus("Failed to delete comment.");
-    }
-  };
+  const jsonPost = (url: string, body: object, errorMessage: string) =>
+    fetchAndRefresh(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }, errorMessage);
 
-  const handleAddChecklistItem = async (cardId: string, text: string) => {
-    try {
-      const response = await fetch(`/api/boards/${boardId}/cards/${cardId}/checklist`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (!response.ok) throw new Error("Failed to add checklist item");
-      const refreshed = await loadBoardForRefresh();
-      if (refreshed) {
-        skipNextPersistRef.current = true;
-        setBoard(refreshed);
-      }
-    } catch {
-      showTransientSyncStatus("Failed to add checklist item.");
-    }
-  };
+  const handleAddComment = (cardId: string, text: string) =>
+    jsonPost(`/api/boards/${boardId}/cards/${cardId}/comments`, { text }, "Failed to add comment.");
 
-  const handleToggleChecklistItem = async (cardId: string, itemId: string) => {
-    try {
-      const response = await fetch(`/api/boards/${boardId}/cards/${cardId}/checklist/${itemId}/toggle`, {
-        method: "POST",
-      });
-      if (!response.ok) throw new Error("Failed to toggle checklist item");
-      const refreshed = await loadBoardForRefresh();
-      if (refreshed) {
-        skipNextPersistRef.current = true;
-        setBoard(refreshed);
-      }
-    } catch {
-      showTransientSyncStatus("Failed to toggle checklist item.");
-    }
-  };
+  const handleDeleteComment = (cardId: string, commentId: string) =>
+    fetchAndRefresh(`/api/boards/${boardId}/cards/${cardId}/comments/${commentId}`, { method: "DELETE" }, "Failed to delete comment.");
 
-  const handleDeleteChecklistItem = async (cardId: string, itemId: string) => {
-    try {
-      const response = await fetch(`/api/boards/${boardId}/cards/${cardId}/checklist/${itemId}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) throw new Error("Failed to delete checklist item");
-      const refreshed = await loadBoardForRefresh();
-      if (refreshed) {
-        skipNextPersistRef.current = true;
-        setBoard(refreshed);
-      }
-    } catch {
-      showTransientSyncStatus("Failed to delete checklist item.");
-    }
-  };
+  const handleAddChecklistItem = (cardId: string, text: string) =>
+    jsonPost(`/api/boards/${boardId}/cards/${cardId}/checklist`, { text }, "Failed to add checklist item.");
+
+  const handleToggleChecklistItem = (cardId: string, itemId: string) =>
+    fetchAndRefresh(`/api/boards/${boardId}/cards/${cardId}/checklist/${itemId}/toggle`, { method: "POST" }, "Failed to toggle checklist item.");
+
+  const handleDeleteChecklistItem = (cardId: string, itemId: string) =>
+    fetchAndRefresh(`/api/boards/${boardId}/cards/${cardId}/checklist/${itemId}`, { method: "DELETE" }, "Failed to delete checklist item.");
 
   const loadActivity = async () => {
     try {
@@ -505,40 +454,14 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
     setIsActivityOpen((prev) => !prev);
   };
 
-  const handleClearColumn = async (columnId: string) => {
-    try {
-      const response = await fetch(`/api/boards/${boardId}/columns/${columnId}/clear`, { method: "POST" });
-      if (!response.ok) throw new Error("Failed to clear column");
-      const refreshed = await loadBoardForRefresh();
-      if (refreshed) {
-        skipNextPersistRef.current = true;
-        setBoard(refreshed);
-      }
-    } catch {
-      showTransientSyncStatus("Failed to clear column.");
-    }
-  };
+  const handleClearColumn = (columnId: string) =>
+    fetchAndRefresh(`/api/boards/${boardId}/columns/${columnId}/clear`, { method: "POST" }, "Failed to clear column.");
 
-  const handleSetWipLimit = async (columnId: string, limit: number | null) => {
-    try {
-      const response = await fetch(`/api/boards/${boardId}/columns/${columnId}/wip-limit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wip_limit: limit }),
-      });
-      if (!response.ok) throw new Error("Failed to set WIP limit");
-      const refreshed = await loadBoardForRefresh();
-      if (refreshed) {
-        skipNextPersistRef.current = true;
-        setBoard(refreshed);
-      }
-    } catch {
-      showTransientSyncStatus("Failed to set WIP limit.");
-    }
-  };
+  const handleSetWipLimit = (columnId: string, limit: number | null) =>
+    jsonPost(`/api/boards/${boardId}/columns/${columnId}/wip-limit`, { wip_limit: limit }, "Failed to set WIP limit.");
 
   const handleDeleteColumn = (columnId: string) => {
-    updateBoard((previous) => ({
+    setBoard((previous) => ({
       ...previous,
       cards: Object.fromEntries(
         Object.entries(previous.cards).filter(([cardId]) => {
@@ -566,26 +489,19 @@ export const KanbanBoard = ({ boardId, onBack }: KanbanBoardProps) => {
     return textMatch && priorityMatch && labelMatch;
   };
 
-  const priorityOrder: Record<string, number> = { high: 0, medium: 1, low: 2 };
+  const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
 
   const sortCards = (cards: typeof board.cards[string][]) => {
     if (!sortBy) return cards;
-    return [...cards].sort((a, b) => {
-      if (sortBy === "priority") {
-        const pa = priorityOrder[a.priority || ""] ?? 3;
-        const pb = priorityOrder[b.priority || ""] ?? 3;
-        return pa - pb;
-      }
-      if (sortBy === "due_date") {
-        const da = a.due_date || "9999-99-99";
-        const db = b.due_date || "9999-99-99";
-        return da.localeCompare(db);
-      }
-      if (sortBy === "title") {
-        return a.title.localeCompare(b.title);
-      }
-      return 0;
-    });
+
+    const comparators: Record<string, (a: typeof cards[0], b: typeof cards[0]) => number> = {
+      priority: (a, b) => (PRIORITY_ORDER[a.priority || ""] ?? 3) - (PRIORITY_ORDER[b.priority || ""] ?? 3),
+      due_date: (a, b) => (a.due_date || "9999-99-99").localeCompare(b.due_date || "9999-99-99"),
+      title: (a, b) => a.title.localeCompare(b.title),
+    };
+
+    const comparator = comparators[sortBy];
+    return comparator ? [...cards].sort(comparator) : cards;
   };
 
   return (

@@ -55,11 +55,12 @@ export const KanbanCard = ({ card, onDelete, onUpdateCard, onAddComment, onDelet
     return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   };
 
-  const isDueSoon = (dateStr: string) => {
+  const getDueStatus = (dateStr: string): "overdue" | "soon" | "ok" => {
     const due = new Date(dateStr + "T23:59:59");
-    const now = new Date();
-    const diffDays = (due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-    return diffDays < 0 ? "overdue" : diffDays <= 2 ? "soon" : "ok";
+    const diffDays = (due.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+    if (diffDays < 0) return "overdue";
+    if (diffDays <= 2) return "soon";
+    return "ok";
   };
 
   return (
@@ -113,9 +114,9 @@ export const KanbanCard = ({ card, onDelete, onUpdateCard, onAddComment, onDelet
                 <span
                   className={clsx(
                     "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold",
-                    isDueSoon(card.due_date) === "overdue" && "bg-red-50 text-red-600",
-                    isDueSoon(card.due_date) === "soon" && "bg-amber-50 text-amber-600",
-                    isDueSoon(card.due_date) === "ok" && "bg-[var(--surface)] text-[var(--gray-text)]"
+                    getDueStatus(card.due_date) === "overdue" && "bg-red-50 text-red-600",
+                    getDueStatus(card.due_date) === "soon" && "bg-amber-50 text-amber-600",
+                    getDueStatus(card.due_date) === "ok" && "bg-[var(--surface)] text-[var(--gray-text)]"
                   )}
                 >
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">

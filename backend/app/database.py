@@ -1,3 +1,4 @@
+import copy
 import hashlib
 import json
 import secrets
@@ -378,40 +379,28 @@ def list_user_boards(user_id: int) -> list[dict]:
 
 
 def list_user_boards_with_counts(user_id: int, include_archived: bool = False) -> list[dict]:
+    archive_filter = "" if include_archived else " AND archived = 0"
     with db_connection() as connection:
-        if include_archived:
-            rows = connection.execute(
-                """
-                SELECT id, title, description, archived, board_json, created_at, updated_at
-                FROM boards
-                WHERE user_id = ?
-                ORDER BY updated_at DESC
-                """,
-                (user_id,),
-            ).fetchall()
-        else:
-            rows = connection.execute(
-                """
-                SELECT id, title, description, archived, board_json, created_at, updated_at
-                FROM boards
-                WHERE user_id = ? AND archived = 0
-                ORDER BY updated_at DESC
-                """,
-                (user_id,),
-            ).fetchall()
+        rows = connection.execute(
+            f"""
+            SELECT id, title, description, archived, board_json, created_at, updated_at
+            FROM boards
+            WHERE user_id = ?{archive_filter}
+            ORDER BY updated_at DESC
+            """,
+            (user_id,),
+        ).fetchall()
 
     boards = []
     for row in rows:
         board_data = json.loads(row["board_json"])
-        card_count = len(board_data.get("cards", {}))
-        column_count = len(board_data.get("columns", []))
         boards.append({
             "id": row["id"],
             "title": row["title"],
             "description": row["description"],
             "archived": bool(row["archived"]),
-            "card_count": card_count,
-            "column_count": column_count,
+            "card_count": len(board_data.get("cards", {})),
+            "column_count": len(board_data.get("columns", [])),
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
         })
@@ -471,7 +460,6 @@ def create_board(
     template: str = "blank",
 ) -> dict:
     if board_json is None:
-        import copy
         board_json = copy.deepcopy(BOARD_TEMPLATE_DATA.get(template, BOARD_TEMPLATE_DATA["blank"]))
 
     with db_connection() as connection:

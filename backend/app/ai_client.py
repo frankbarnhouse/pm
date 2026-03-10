@@ -117,9 +117,7 @@ def run_connectivity_check(
         if not output_text:
             raise OpenAIConnectivityError("OpenAI response did not include output_text")
         return output_text
-    except MissingApiKeyError:
-        raise
-    except OpenAIConnectivityError:
+    except (MissingApiKeyError, OpenAIConnectivityError):
         raise
     except Exception as exc:  # noqa: BLE001
         raise OpenAIConnectivityError(str(exc)) from exc
@@ -167,9 +165,7 @@ def run_structured_chat(
         if not output_text:
             raise OpenAIChatError("OpenAI response did not include output_text")
         return json.loads(output_text)
-    except MissingApiKeyError:
-        raise
-    except OpenAIChatError:
+    except (MissingApiKeyError, OpenAIChatError):
         raise
     except Exception as exc:  # noqa: BLE001
         raise OpenAIChatError(str(exc)) from exc

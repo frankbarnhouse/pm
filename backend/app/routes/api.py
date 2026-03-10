@@ -1,18 +1,21 @@
 import json
 import logging
+from collections.abc import Callable
+from datetime import date
 
 from fastapi import APIRouter, HTTPException, Request
 
 from app.ai_client import (
-    get_openai_model,
     MissingApiKeyError,
     OpenAIChatError,
     OpenAIConnectivityError,
+    get_openai_model,
     run_connectivity_check,
     run_structured_chat,
 )
 from app.board_ops import apply_board_operations
 from app.database import (
+    BOARD_TEMPLATE_DATA,
     archive_board,
     change_user_password,
     create_board,
@@ -20,6 +23,7 @@ from app.database import (
     duplicate_board,
     get_board,
     get_board_activity,
+    get_user_by_username,
     hash_password,
     list_user_boards_with_counts,
     log_activity,
@@ -36,12 +40,12 @@ from app.models import (
     AddCommentOperation,
     AddCommentRequest,
     AIChatResultPayload,
-    ClearColumnOperation,
-    DeleteChecklistItemOperation,
     BoardPayload,
     ChangePasswordRequest,
     ChatMessagePayload,
+    ClearColumnOperation,
     CreateBoardRequest,
+    DeleteChecklistItemOperation,
     DeleteCommentOperation,
     ImportBoardRequest,
     SetWipLimitOperation,
@@ -80,8 +84,6 @@ def update_profile(request: Request, payload: UpdateProfileRequest) -> dict:
     user = require_api_user(request)
     if payload.display_name is not None:
         update_user_display_name(user["id"], payload.display_name)
-    from app.database import get_user_by_username
-
     updated = get_user_by_username(user["username"])
     return {
         "id": updated["id"],
@@ -139,7 +141,6 @@ def get_boards(request: Request, include_archived: bool = False) -> dict:
 @router.get("/boards/templates")
 def get_board_templates(request: Request) -> dict:
     require_api_user(request)
-    from app.database import BOARD_TEMPLATE_DATA
     templates = []
     descriptions = {
         "blank": "Basic kanban board with Backlog, In Progress, Review, and Done columns.",
@@ -236,8 +237,6 @@ def get_board_stats(request: Request, board_id: int) -> dict:
     total_cards = len(cards)
     by_priority = {"high": 0, "medium": 0, "low": 0, "none": 0}
     overdue_count = 0
-    from datetime import date
-
     today = date.today().isoformat()
     for card in cards.values():
         p = card.get("priority")
@@ -369,16 +368,17 @@ def clear_column(request: Request, board_id: int, column_id: str) -> dict:
     return {"cleared": True}
 
 
-@router.post("/boards/{board_id}/chat")
-def board_chat(request: Request, board_id: int, payload: ChatMessagePayload) -> dict[str, str | bool | None]:
-    user = require_api_user(request)
-    board = read_board_data(board_id, user["id"])
-    history = get_session_history(request)
-
+def _process_chat(
+    board: dict,
+    prompt: str,
+    history: list[dict[str, str]],
+    persist_fn: Callable[[dict], None],
+    activity_fn: Callable[[str], None] | None = None,
+) -> dict[str, str | bool | None]:
     try:
         raw_result = run_structured_chat(
             board=board,
-            user_prompt=payload.prompt,
+            user_prompt=prompt,
             conversation_history=history,
         )
         result = AIChatResultPayload.model_validate(raw_result)
@@ -394,16 +394,16 @@ def board_chat(request: Request, board_id: int, payload: ChatMessagePayload) -> 
     if result.board_update is not None:
         try:
             updated_board = apply_board_operations(board, result.board_update.operations)
-            write_board_data(board_id, user["id"], updated_board)
+            persist_fn(updated_board)
             board_updated = True
-            op_types = ", ".join(op.type for op in result.board_update.operations)
-            log_activity(board_id, user["id"], "ai_update", f"AI applied: {op_types}")
+            if activity_fn:
+                op_types = ", ".join(op.type for op in result.board_update.operations)
+                activity_fn(f"AI applied: {op_types}")
         except ValueError as exc:
-            board_updated = False
             update_error = str(exc)
             logger.error("Board operation failed: %s", update_error)
 
-    history.append({"role": "user", "content": payload.prompt})
+    history.append({"role": "user", "content": prompt})
     history.append({"role": "assistant", "content": result.assistant_message})
     history[:] = history[-MAX_CHAT_HISTORY_MESSAGES:]
 
@@ -412,6 +412,19 @@ def board_chat(request: Request, board_id: int, payload: ChatMessagePayload) -> 
         "board_updated": board_updated,
         "update_error": update_error,
     }
+
+
+@router.post("/boards/{board_id}/chat")
+def board_chat(request: Request, board_id: int, payload: ChatMessagePayload) -> dict[str, str | bool | None]:
+    user = require_api_user(request)
+    board = read_board_data(board_id, user["id"])
+    return _process_chat(
+        board=board,
+        prompt=payload.prompt,
+        history=get_session_history(request),
+        persist_fn=lambda updated: write_board_data(board_id, user["id"], updated),
+        activity_fn=lambda detail: log_activity(board_id, user["id"], "ai_update", detail),
+    )
 
 
 # --- Legacy single-board endpoints (backwards compatible) ---
@@ -454,40 +467,9 @@ def ai_connectivity(request: Request) -> dict[str, str | bool]:
 def chat(request: Request, payload: ChatMessagePayload) -> dict[str, str | bool | None]:
     user = require_api_user(request)
     board = read_user_board(user["id"])
-    history = get_session_history(request)
-
-    try:
-        raw_result = run_structured_chat(
-            board=board,
-            user_prompt=payload.prompt,
-            conversation_history=history,
-        )
-        result = AIChatResultPayload.model_validate(raw_result)
-    except MissingApiKeyError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except OpenAIChatError as exc:
-        raise HTTPException(status_code=502, detail=f"OpenAI chat failed: {exc}") from exc
-    except (json.JSONDecodeError, ValueError) as exc:
-        raise HTTPException(status_code=502, detail=f"Invalid AI structured response: {exc}") from exc
-
-    board_updated = False
-    update_error = None
-    if result.board_update is not None:
-        try:
-            updated_board = apply_board_operations(board, result.board_update.operations)
-            write_user_board(user["id"], updated_board)
-            board_updated = True
-        except ValueError as exc:
-            board_updated = False
-            update_error = str(exc)
-            logger.error("Board operation failed: %s", update_error)
-
-    history.append({"role": "user", "content": payload.prompt})
-    history.append({"role": "assistant", "content": result.assistant_message})
-    history[:] = history[-MAX_CHAT_HISTORY_MESSAGES:]
-
-    return {
-        "assistant_message": result.assistant_message,
-        "board_updated": board_updated,
-        "update_error": update_error,
-    }
+    return _process_chat(
+        board=board,
+        prompt=payload.prompt,
+        history=get_session_history(request),
+        persist_fn=lambda updated: write_user_board(user["id"], updated),
+    )

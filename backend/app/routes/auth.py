@@ -17,6 +17,20 @@ from app.session import (
 router = APIRouter()
 
 
+def _create_session(username: str, redirect_url: str = "/") -> RedirectResponse:
+    response = RedirectResponse(url=redirect_url, status_code=status.HTTP_303_SEE_OTHER)
+    session_token = uuid4().hex
+    SESSION_STORE[session_token] = username
+    SESSION_CHAT_HISTORY.setdefault(session_token, [])
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=session_token,
+        httponly=True,
+        samesite="strict",
+    )
+    return response
+
+
 @router.get("/login", include_in_schema=False)
 def login_page(request: Request, error: str | None = None) -> Response:
     if current_user(request):
@@ -47,17 +61,7 @@ async def login(request: Request) -> RedirectResponse:
     if not verify_credentials(username, password):
         return RedirectResponse(url="/login?error=1", status_code=status.HTTP_303_SEE_OTHER)
 
-    response = RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
-    session_token = uuid4().hex
-    SESSION_STORE[session_token] = username
-    SESSION_CHAT_HISTORY.setdefault(session_token, [])
-    response.set_cookie(
-        key=SESSION_COOKIE,
-        value=session_token,
-        httponly=True,
-        samesite="strict",
-    )
-    return response
+    return _create_session(username)
 
 
 @router.post("/auth/register", include_in_schema=False)
@@ -86,18 +90,7 @@ async def register(request: Request) -> RedirectResponse:
     except Exception:
         return RedirectResponse(url="/register?error=4", status_code=status.HTTP_303_SEE_OTHER)
 
-    # Auto-login after registration
-    response = RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
-    session_token = uuid4().hex
-    SESSION_STORE[session_token] = username
-    SESSION_CHAT_HISTORY.setdefault(session_token, [])
-    response.set_cookie(
-        key=SESSION_COOKIE,
-        value=session_token,
-        httponly=True,
-        samesite="strict",
-    )
-    return response
+    return _create_session(username)
 
 
 @router.post("/auth/logout", include_in_schema=False)
