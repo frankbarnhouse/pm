@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^cd /Users/frankbarnhouse/GitHub\\\\ Repos/udemy_pm && python -m pytest backend/tests/test_registration_flow\\.py -v$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}
